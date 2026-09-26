@@ -34,7 +34,6 @@ contract CurveHandler is Test {
     function buy(uint256 who, uint256 amount) external {
         address t = traders[who % traders.length];
         amount = bound(amount, 1e6, 5_000e6);
-        if (curve.soldOut()) return;
         (PriceOracle.Quote memory q, bytes memory sig) = base.signedQuote(0xFED, 0);
         vm.startPrank(t);
         uint256 before = usdg.balanceOf(t);
@@ -86,16 +85,19 @@ contract CurveInvariants is PolypadBase {
 
     /// The curve always holds the pToken it thinks it holds.
     function invariant_curveHoldsTrackedQuote() public view {
+        if (curve.graduated()) return;
         assertEq(p.balanceOf(address(curve)), curve.trackedQuote());
     }
 
     /// The curve always holds exactly the coins it tracks.
     function invariant_curveHoldsTrackedTokens() public view {
+        if (curve.graduated()) return;
         assertEq(coin.balanceOf(address(curve)), curve.trackedTokens());
     }
 
     /// Selling every outstanding coin can never need more pToken than the curve holds.
     function invariant_curveIsSolvent() public view {
+        if (curve.graduated()) return;
         uint256 outstanding = coin.SUPPLY() - curve.trackedTokens();
         uint256 gross = (outstanding * (curve.phantom() + curve.trackedQuote())) / (curve.trackedTokens() + outstanding);
         assertLe(gross, curve.trackedQuote() + 1);
@@ -103,10 +105,21 @@ contract CurveInvariants is PolypadBase {
 
     /// Never sells past the reserve.
     function invariant_reserveUntouched() public view {
+        if (curve.graduated()) return;
         assertGe(curve.trackedTokens(), curve.reserved());
     }
 
-    /// Traders as a group never take out more USDG than they put in (price fixed here).
+    /// Once graduated, the curve is empty and its coins are in the pool or burned.
+    function invariant_graduationEmptiesTheCurve() public view {
+        if (!curve.graduated()) return;
+        assertEq(curve.trackedQuote(), 0);
+        assertEq(curve.trackedTokens(), 0);
+        assertEq(coin.balanceOf(address(curve)), 0);
+        assertEq(p.balanceOf(address(curve)), 0);
+    }
+
+    /// Traders as a group never take out more USDG than they put in (price fixed here),
+    /// on the curve or in the pool.
     function invariant_tradersNeverProfitAtFixedPrice() public view {
         assertLe(handler.usdgOut(), handler.usdgIn());
     }

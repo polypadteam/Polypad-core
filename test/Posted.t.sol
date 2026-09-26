@@ -243,7 +243,8 @@ contract PostedTest is PolypadBase {
     }
 
     function test_quotesCannotBeValidForLongerThan30s() public {
-        PriceOracle.Quote memory q = PriceOracle.Quote(ID, BUY, 600_000, type(uint256).max, uint64(block.timestamp + 31));
+        PriceOracle.Quote memory q =
+            PriceOracle.Quote(ID, BUY, 600_000, type(uint256).max, uint64(block.timestamp + 31));
         bytes memory sig = _sign(q, signerPk);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.QuoteTooLong.selector, q.validUntil));
@@ -269,7 +270,8 @@ contract PostedTest is PolypadBase {
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter != address(router) || logs[i].topics[0] != topic) continue;
             ++swaps;
-            (bool isBuy, uint256 usdgOut,,,, bool posted) = abi.decode(logs[i].data, (bool, uint256, uint256, uint256, uint256, bool));
+            (bool isBuy, uint256 usdgOut,,,, bool posted) =
+                abi.decode(logs[i].data, (bool, uint256, uint256, uint256, uint256, bool));
             assertFalse(isBuy);
             assertEq(usdgOut, out);
             assertTrue(posted);

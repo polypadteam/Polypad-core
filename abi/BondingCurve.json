@@ -26,6 +26,11 @@
         "name": "phantom_",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "graduator_",
+        "type": "address",
+        "internalType": "contract Graduator"
       }
     ],
     "stateMutability": "nonpayable"
@@ -58,20 +63,20 @@
   },
   {
     "type": "function",
-    "name": "FEE_BPS",
+    "name": "DEAD",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "FLOAT_SHARE_BPS",
+    "name": "FEE_BPS",
     "inputs": [],
     "outputs": [
       {
@@ -164,6 +169,39 @@
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "graduate",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "graduated",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "graduator",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract Graduator"
       }
     ],
     "stateMutability": "view"
@@ -410,6 +448,50 @@
   },
   {
     "type": "event",
+    "name": "Graduated",
+    "inputs": [
+      {
+        "name": "poolId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "coinsToPool",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pTokensToPool",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "coinsBurned",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GraduationFailed",
+    "inputs": [
+      {
+        "name": "reason",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Sell",
     "inputs": [
       {
@@ -458,7 +540,17 @@
   },
   {
     "type": "error",
+    "name": "Graduated_",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotInitialized",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotSoldOut",
     "inputs": []
   },
   {

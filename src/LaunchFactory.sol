@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {BondingCurve} from "./BondingCurve.sol";
 import {Coin} from "./Coin.sol";
+import {Graduator} from "./Graduator.sol";
 import {PExchange} from "./PExchange.sol";
 import {PriceOracle} from "./PriceOracle.sol";
 import {PToken} from "./PToken.sol";
@@ -31,7 +32,11 @@ contract LaunchFactory is Ownable2Step {
     /// @notice Graduation target in USDG, 6 decimals.
     uint256 public gradUsd = 6_000e6;
 
+    /// @notice Where new curves graduate. Existing curves keep the one they were made with.
+    Graduator public graduator;
+
     address[] public curves;
+    mapping(address => bool) public isCurve;
 
     event Launched(
         uint256 indexed positionId,
@@ -43,9 +48,11 @@ contract LaunchFactory is Ownable2Step {
         uint256 phantom
     );
     event ConfigSet(address platform, uint256 gradUsd);
+    event GraduatorSet(address graduator);
 
     error QuoteForOtherMarket(uint256 quoted, uint256 positionId);
     error PriceOutOfBand(uint256 price);
+    error NoGraduator();
 
     constructor(address owner_, PExchange exchange_, PriceOracle oracle_, address platform_) Ownable(owner_) {
         exchange = exchange_;
@@ -59,6 +66,11 @@ contract LaunchFactory is Ownable2Step {
         emit ConfigSet(platform_, gradUsd_);
     }
 
+    function setGraduator(Graduator graduator_) external onlyOwner {
+        graduator = graduator_;
+        emit GraduatorSet(address(graduator_));
+    }
+
     function launch(
         uint256 positionId,
         string calldata name,
@@ -68,21 +80,25 @@ contract LaunchFactory is Ownable2Step {
         bytes calldata sig
     ) external returns (Coin coin, BondingCurve curve) {
         if (q.positionId != positionId) revert QuoteForOtherMarket(q.positionId, positionId);
+        if (address(graduator) == address(0)) revert NoGraduator();
         uint256 price = _launchPrice(q, sig);
         PToken p = exchange.ensurePToken(positionId);
 
         // Target in shares = gradUsd / price; phantom = 0.4x target.
-        curve = new BondingCurve(IERC20(address(p)), address(exchange), msg.sender, platform, (gradUsd * 2e6) / (price * 5));
+        curve = new BondingCurve(
+            IERC20(address(p)), address(exchange), msg.sender, platform, (gradUsd * 2e6) / (price * 5), graduator
+        );
         coin = new Coin(name, symbol, metadataURI, address(curve));
         curve.initialize(IERC20(address(coin)));
         curves.push(address(curve));
+        isCurve[address(curve)] = true;
 
         emit Launched(positionId, msg.sender, address(coin), address(curve), address(p), price, curve.phantom());
     }
 
     function _launchPrice(PriceOracle.Quote calldata q, bytes calldata sig) internal view returns (uint256) {
         uint64 price = oracle.verify(q, sig, oracle.BUY());
-        if (price < exchange.minPrice() || price > exchange.maxPrice()) revert PriceOutOfBand(price);
+        if (price < exchange.minPrice() || price > exchange.maxPriceOf(q.positionId)) revert PriceOutOfBand(price);
         return price;
     }
 

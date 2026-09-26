@@ -5,6 +5,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import {Graduator} from "./Graduator.sol";
+
 /**
  * @title BondingCurve
  * @notice One coin's launch curve, trading the coin against its market's pToken.
@@ -24,26 +26,29 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
  * Reserves are tracked, never read from balances, so tokens sent here directly
  * cannot move the price.
  *
- * Phase 1 has no pool: when the sellable supply runs out, buys stop and sells
- * stay open. Graduation into Uniswap v4 comes in phase 2.
+ * When the sellable supply runs out the curve graduates in the same
+ * transaction: the whole raise and enough reserved coins to keep the price go
+ * into a Uniswap v4 pool owned by the `Graduator`, the rest of the reserve is
+ * burned, and the curve closes. If graduation fails for any reason the buy still
+ * succeeds, the curve stays sold out, and anyone can retry with `graduate()`.
  *
- * Fees are 1% of the pToken side of every trade: 60% to the creator, 20% to
- * the exchange (burned there, so the desk sells the share and the proceeds
- * warm the Polymarket balance), 20% to the platform.
+ * Fees are 1% of the pToken side of every trade: 70% to the creator, 30% to the
+ * platform. The pool charges the same 1% and splits it the same way.
  */
 contract BondingCurve is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant BPS = 10_000;
     uint256 public constant FEE_BPS = 100;
-    uint256 public constant CREATOR_SHARE_BPS = 6_000;
-    uint256 public constant FLOAT_SHARE_BPS = 2_000;
+    uint256 public constant CREATOR_SHARE_BPS = 7_000;
+    address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     IERC20 public immutable pToken;
     address public immutable exchange;
     address public immutable creator;
     address public immutable platform;
     address public immutable factory;
+    Graduator public immutable graduator;
     /// @notice Virtual pToken reserve, 6 decimals. Never held.
     uint256 public immutable phantom;
 
@@ -54,10 +59,16 @@ contract BondingCurve is ReentrancyGuard {
     uint256 public trackedQuote;
     /// @notice Coins the curve holds, reserved included.
     uint256 public trackedTokens;
+    /// @notice Set once the pool exists; the curve no longer trades.
+    bool public graduated;
 
-    event Buy(address indexed buyer, address indexed to, uint256 quoteIn, uint256 coinsOut, uint256 fee, uint256 refund);
+    event Buy(
+        address indexed buyer, address indexed to, uint256 quoteIn, uint256 coinsOut, uint256 fee, uint256 refund
+    );
     event Sell(address indexed seller, address indexed to, uint256 coinsIn, uint256 quoteOut, uint256 fee);
     event SoldOut();
+    event Graduated(bytes32 indexed poolId, uint256 coinsToPool, uint256 pTokensToPool, uint256 coinsBurned);
+    event GraduationFailed(bytes reason);
 
     error OnlyFactory();
     error AlreadyInitialized();
@@ -65,9 +76,19 @@ contract BondingCurve is ReentrancyGuard {
     error ZeroAmount();
     error SoldOut_();
     error Slippage(uint256 got, uint256 minimum);
+    error Graduated_();
+    error NotSoldOut();
 
-    constructor(IERC20 pToken_, address exchange_, address creator_, address platform_, uint256 phantom_) {
+    constructor(
+        IERC20 pToken_,
+        address exchange_,
+        address creator_,
+        address platform_,
+        uint256 phantom_,
+        Graduator graduator_
+    ) {
         pToken = pToken_;
+        graduator = graduator_;
         exchange = exchange_;
         creator = creator_;
         platform = platform_;
@@ -98,6 +119,7 @@ contract BondingCurve is ReentrancyGuard {
     {
         if (address(coin) == address(0)) revert NotInitialized();
         if (quoteIn == 0) revert ZeroAmount();
+        if (graduated) revert Graduated_();
         uint256 sellable = trackedTokens - reserved;
         if (sellable == 0) revert SoldOut_();
 
@@ -126,12 +148,21 @@ contract BondingCurve is ReentrancyGuard {
         coin.safeTransfer(to, out);
         _payFee(fee);
         emit Buy(msg.sender, to, quoteIn - refund, out, fee, refund);
+        if (trackedTokens == reserved) _graduate();
+    }
+
+    /// @notice Retry graduation of a sold-out curve whose graduation failed.
+    function graduate() external nonReentrant {
+        if (graduated) revert Graduated_();
+        if (trackedTokens != reserved) revert NotSoldOut();
+        _graduate();
     }
 
     /// @notice Sell coins back to the curve for pToken.
     function sell(uint256 coinsIn, uint256 minOut, address to) external nonReentrant returns (uint256 out) {
         if (address(coin) == address(0)) revert NotInitialized();
         if (coinsIn == 0) revert ZeroAmount();
+        if (graduated) revert Graduated_();
 
         uint256 v = phantom + trackedQuote;
         uint256 gross = (coinsIn * v) / (trackedTokens + coinsIn);
@@ -154,21 +185,27 @@ contract BondingCurve is ReentrancyGuard {
 
     /* --------------------------------------------------------------- views */
 
+    /// @notice Coins out for `quoteIn` pToken on the curve; 0 once graduated (use the pool).
     function quoteBuy(uint256 quoteIn) external view returns (uint256 out) {
+        if (graduated) return 0;
         uint256 net = quoteIn - (quoteIn * FEE_BPS) / BPS;
         out = (net * trackedTokens) / (phantom + trackedQuote + net);
         uint256 sellable = trackedTokens - reserved;
         if (out > sellable) out = sellable;
     }
 
+    /// @notice pToken out for `coinsIn` on the curve; 0 once graduated (use the pool).
     function quoteSell(uint256 coinsIn) external view returns (uint256 out) {
+        if (graduated) return 0;
         uint256 gross = (coinsIn * (phantom + trackedQuote)) / (trackedTokens + coinsIn);
         if (gross > trackedQuote) gross = trackedQuote;
         out = gross - (gross * FEE_BPS) / BPS;
     }
 
     /// @notice Marginal price in pToken per whole coin, 6 decimals (pToken units per 1e18 coin).
+    ///         Once graduated, the pool's price.
     function spotPrice() external view returns (uint256) {
+        if (graduated) return graduator.spotPrice(address(coin));
         return ((phantom + trackedQuote) * 1e18) / trackedTokens;
     }
 
@@ -178,18 +215,39 @@ contract BondingCurve is ReentrancyGuard {
     }
 
     function soldOut() external view returns (bool) {
-        return trackedTokens == reserved;
+        return graduated || trackedTokens == reserved;
     }
 
     /* ------------------------------------------------------------ internal */
 
+    /**
+     * @dev Pool at the curve's final price: the whole raise q against
+     *      reserved x q / (phantom + q) coins; the rest of the reserve is burned.
+     *      A failure leaves the curve sold out and retryable.
+     */
+    function _graduate() internal {
+        uint256 q = trackedQuote;
+        uint256 poolCoins = (reserved * q) / (phantom + q);
+        coin.forceApprove(address(graduator), poolCoins);
+        pToken.forceApprove(address(graduator), q);
+        try graduator.graduate(coin, pToken, poolCoins, q, creator, platform) returns (bytes32 poolId) {
+            graduated = true;
+            uint256 burned = trackedTokens - poolCoins;
+            trackedQuote = 0;
+            trackedTokens = 0;
+            if (burned > 0) coin.safeTransfer(DEAD, burned);
+            emit Graduated(poolId, poolCoins, q, burned);
+        } catch (bytes memory reason) {
+            coin.forceApprove(address(graduator), 0);
+            pToken.forceApprove(address(graduator), 0);
+            emit GraduationFailed(reason);
+        }
+    }
+
     function _payFee(uint256 fee) internal {
         if (fee == 0) return;
         uint256 toCreator = (fee * CREATOR_SHARE_BPS) / BPS;
-        uint256 toFloat = (fee * FLOAT_SHARE_BPS) / BPS;
-        uint256 toPlatform = fee - toCreator - toFloat;
         if (toCreator > 0) pToken.safeTransfer(creator, toCreator);
-        if (toFloat > 0) pToken.safeTransfer(exchange, toFloat);
-        if (toPlatform > 0) pToken.safeTransfer(platform, toPlatform);
+        if (fee > toCreator) pToken.safeTransfer(platform, fee - toCreator);
     }
 }

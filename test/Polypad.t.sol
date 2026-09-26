@@ -7,6 +7,8 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {BondingCurve} from "../src/BondingCurve.sol";
 import {Coin} from "../src/Coin.sol";
+import {Graduator} from "../src/Graduator.sol";
+import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {LaunchFactory} from "../src/LaunchFactory.sol";
 import {PExchange} from "../src/PExchange.sol";
 import {PriceOracle} from "../src/PriceOracle.sol";
@@ -47,6 +49,9 @@ contract PolypadBase is Test {
     PExchange internal exchange;
     LaunchFactory internal factory;
     Router internal router;
+    Graduator internal graduator;
+    /// @dev Uniswap's PoolManager, its Robinhood Chain bytecode at its Robinhood Chain address.
+    IPoolManager internal poolManager = IPoolManager(0x8366a39CC670B4001A1121B8F6A443A643e40951);
 
     /// @dev What the pricer would quote right now, per market (both sides, for simplicity).
     mapping(uint256 => uint64) internal px;
@@ -57,9 +62,16 @@ contract PolypadBase is Test {
         oracle = new PriceOracle(owner, signer, keeper);
         exchange = new PExchange(owner, IERC20(address(usdg)), oracle, keeper);
         factory = new LaunchFactory(owner, exchange, oracle, platform);
-        router = new Router(IERC20(address(usdg)), exchange);
-        vm.prank(owner);
+        vm.etch(address(poolManager), vm.parseBytes(vm.readFile("test/fixtures/PoolManager.hex")));
+        // Any address whose low 14 bits are exactly BEFORE_INITIALIZE.
+        address hookAt = address(uint160(0x1234560000000000000000000000000000000000) | 0x2000);
+        deployCodeTo("Graduator.sol:Graduator", abi.encode(poolManager, address(factory)), hookAt);
+        graduator = Graduator(hookAt);
+        router = new Router(IERC20(address(usdg)), exchange, poolManager);
+        vm.startPrank(owner);
         exchange.setRoles(keeper, address(factory), bridge);
+        factory.setGraduator(graduator);
+        vm.stopPrank();
 
         // A deep float so redemptions never fail for lack of USDG in these tests.
         usdg.mint(address(exchange), 100_000e6);
@@ -213,11 +225,11 @@ contract TradeTest is PolypadBase {
         uint256 buyPrice = (uint256(600_000) * 10_025 + 9_999) / 10_000;
         uint256 expectedShares = (uint256(600e6) * 1e6) / buyPrice;
         assertEq(p.totalSupply(), expectedShares);
-        // Curve holds the shares net of fees; fees went to creator, exchange, platform.
+        // Curve holds the shares net of fees; fees went 70/30 to creator and platform.
         uint256 fee = expectedShares / 100;
         assertEq(curve.trackedQuote(), expectedShares - fee);
-        assertEq(p.balanceOf(creator), fee * 6_000 / 10_000);
-        assertEq(p.balanceOf(address(exchange)), fee * 2_000 / 10_000);
+        assertEq(p.balanceOf(creator), fee * 7_000 / 10_000);
+        assertEq(p.balanceOf(platform), fee - fee * 7_000 / 10_000);
     }
 
     function test_sellReturnsUsdgAndBurnsShares() public {
@@ -229,13 +241,18 @@ contract TradeTest is PolypadBase {
         assertApproxEqRel(out, 600e6 * 975 / 1000, 0.005e18);
         assertEq(coin.balanceOf(alice), 0);
         // Only the fee shares remain in circulation.
-        assertEq(p.totalSupply(), p.balanceOf(creator) + p.balanceOf(platform) + p.balanceOf(address(exchange)) + curve.trackedQuote());
+        assertEq(
+            p.totalSupply(),
+            p.balanceOf(creator) + p.balanceOf(platform) + p.balanceOf(address(exchange)) + curve.trackedQuote()
+        );
     }
 
     /// @dev Buying at the ask and selling at the bid: the user pays the book's gap, not the float.
     function test_buyAndSellUseTheirOwnSide() public {
-        PriceOracle.Quote memory bq = PriceOracle.Quote(ID, BUY, 610_000, type(uint256).max, uint64(block.timestamp + 15));
-        PriceOracle.Quote memory sq = PriceOracle.Quote(ID, SELL, 590_000, type(uint256).max, uint64(block.timestamp + 15));
+        PriceOracle.Quote memory bq =
+            PriceOracle.Quote(ID, BUY, 610_000, type(uint256).max, uint64(block.timestamp + 15));
+        PriceOracle.Quote memory sq =
+            PriceOracle.Quote(ID, SELL, 590_000, type(uint256).max, uint64(block.timestamp + 15));
         vm.prank(alice);
         router.buy(curve, 610e6, 0, alice, bq, _sign(bq, signerPk));
         // 610 USDG at 61c + spread: just under 1,000 shares.
@@ -270,7 +287,8 @@ contract TradeTest is PolypadBase {
     }
 
     function test_mintRefusesQuoteValidTooLong() public {
-        PriceOracle.Quote memory q = PriceOracle.Quote(ID, BUY, 600_000, type(uint256).max, uint64(block.timestamp + 121));
+        PriceOracle.Quote memory q =
+            PriceOracle.Quote(ID, BUY, 600_000, type(uint256).max, uint64(block.timestamp + 121));
         bytes memory sig = _sign(q, signerPk);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.QuoteTooLong.selector, q.validUntil));
@@ -278,7 +296,8 @@ contract TradeTest is PolypadBase {
     }
 
     function test_mintRefusesForgedOrAlteredQuote() public {
-        PriceOracle.Quote memory q = PriceOracle.Quote(ID, BUY, 600_000, type(uint256).max, uint64(block.timestamp + 15));
+        PriceOracle.Quote memory q =
+            PriceOracle.Quote(ID, BUY, 600_000, type(uint256).max, uint64(block.timestamp + 15));
         bytes memory forged = _sign(q, 0xBAD);
         vm.prank(alice);
         vm.expectRevert(PriceOracle.BadSignature.selector);
@@ -342,17 +361,12 @@ contract TradeTest is PolypadBase {
         _buy(alice, curve, 100e6);
     }
 
-    function test_settlementPaysPayoutAndStopsMints() public {
+    function test_settlementPaysPayoutLessSettleFee() public {
         (uint256 coins,) = _buy(alice, curve, 600e6);
         vm.prank(keeper);
         oracle.settle(ID, 1e6);
 
-        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
-        vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.MarketSettled.selector, ID));
-        router.buy(curve, 100e6, 0, bob, q, sig);
-
-        // Settled redemptions need no quote and pay $1 per share.
+        // Settled redemptions need no quote and pay $1 per share less 0.5%.
         vm.warp(block.timestamp + 1 days);
         PriceOracle.Quote memory none;
         vm.startPrank(alice);
@@ -363,15 +377,21 @@ contract TradeTest is PolypadBase {
         assertGt(out, 950e6);
     }
 
-    function test_settledNoPaysZero() public {
+    function test_settledNoPaysZeroAndRefusesMints() public {
         (uint256 coins,) = _buy(alice, curve, 600e6);
         vm.prank(keeper);
         oracle.settle(ID, 0);
         assertEq(_sell(alice, curve, coins), 0);
+        PriceOracle.Quote memory none;
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.SettledAtZero.selector, ID));
+        router.buy(curve, 100e6, 0, bob, none, "");
     }
 
-    function test_absorbBurnsFloatFees() public {
+    function test_absorbBurnsPTokenSentToTheExchange() public {
         _buy(alice, curve, 600e6);
+        vm.prank(creator);
+        p.transfer(address(exchange), 1e6);
         uint256 held = p.balanceOf(address(exchange));
         uint256 supply = p.totalSupply();
         assertGt(held, 0);
@@ -380,36 +400,15 @@ contract TradeTest is PolypadBase {
         assertEq(p.balanceOf(address(exchange)), 0);
     }
 
-    function test_soldOutReturnsUnusedShares() public {
+    function test_sellOutGraduatesAndSpendsTheRestInThePool() public {
         // Target is ~10,000 shares (~$6k); pay far more.
         (uint256 coins, uint256 refund) = _buy(alice, curve, 20_000e6);
-        assertTrue(curve.soldOut());
-        assertEq(coins, coin.SUPPLY() - curve.reserved());
-        assertGt(refund, 0);
-        assertEq(p.balanceOf(alice), refund);
-        // Shares used: about the target plus the 1% fee.
-        uint256 minted = (uint256(20_000e6) * 1e6) / ((uint256(600_000) * 10_025 + 9_999) / 10_000);
-        assertApproxEqRel(minted - refund, 10_100e6, 0.01e18);
-
-        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
-        vm.prank(bob);
-        vm.expectRevert(BondingCurve.SoldOut_.selector);
-        router.buy(curve, 10e6, 0, bob, q, sig);
-    }
-
-    function test_insufficientFloatReverts() public {
-        (uint256 coins,) = _buy(alice, curve, 600e6);
-        uint256 all = usdg.balanceOf(address(exchange));
-        vm.prank(keeper);
-        exchange.sendToBridge(all);
-        assertEq(usdg.balanceOf(bridge), all);
-
-        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, SELL);
-        vm.startPrank(alice);
-        coin.approve(address(router), coins);
-        vm.expectRevert();
-        router.sell(curve, coins, 0, alice, q, sig);
-        vm.stopPrank();
+        assertTrue(curve.graduated());
+        assertEq(refund, 0);
+        assertEq(p.balanceOf(alice), 0);
+        // The curve's sellable supply, plus more from the pool.
+        assertGt(coins, coin.SUPPLY() - curve.reserved());
+        assertEq(coin.balanceOf(alice), coins);
     }
 
     function test_onlyRolesCanActOnOracleAndExchange() public {

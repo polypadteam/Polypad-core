@@ -7,7 +7,7 @@ holders and graduation, and to let their users buy and sell.
 Chain: **Robinhood Chain** (EVM, chain id `4663`). Quote currency for users:
 **USDG** (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`, 6 decimals).
 
-> Launch contracts, deployed at block 73,367,899 and verified on Sourcify.
+> Launch contracts, deployed at block 73,393,714 and verified on Sourcify.
 
 ## What a Polypad coin is
 
@@ -27,10 +27,12 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x1ac2e915Be970EeF736E92B5A0930de47Cc7D38F` | Creates coins; emits `Launched` |
-| Router | `0x8E160816a5bB551410B1E60BCEB3A84B14bFA6AC` | USDG in and out; emits `Bought` / `Sold` with USDG amounts |
-| PExchange | `0x74a9944e20529c8fF5aA3659E536e6292Ea0765e` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0x220fbf8f08833D1D1a6ca1ADafF4367a29EDb488` | Verifies signed prices |
+| LaunchFactory | `0x134BBE6a933337b12f4FA6AD6996e7052de8E408` | Creates coins; emits `Launched` |
+| Router | `0x12d6eDD87bAf5037D00701cf0803569AbcaDe621` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0x6C245EBCee258A5Ac258c430c081F9736e832eAC` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0x838954F170F8b331aeD5406Df28cd7300Abb8DEA` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0xF233B8cB1DA715bC321DC83f809d260e5F0Ce000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
 outcome has one **pToken**, shared by every coin on that outcome.
@@ -128,11 +130,29 @@ mcap  = $2,511
 
 ## Graduation
 
-`SoldOut()` on the curve marks graduation: the sellable supply is gone (about
-$6,000 raised at launch odds, around a $29k market cap). Buys on the curve stop;
-sells stay open. Phase 2 moves graduated coins into a Uniswap v4 pool on
-Robinhood Chain (PoolManager `0x8366a39CC670B4001A1121B8F6A443A643e40951`);
-the pool id will be emitted at graduation.
+When the curve's sellable supply runs out (about $6,000 raised at launch odds,
+around a $29k market cap) the coin **graduates in the same transaction** into a
+standard Uniswap v4 pool against its pToken:
+
+```solidity
+// Graduator
+event Graduated(address indexed coin, address indexed pToken, bytes32 indexed poolId,
+                uint256 coins, uint256 pTokens, uint128 liquidity);
+```
+
+- Pool key: `currency0/1` = the coin and its pToken sorted by address, `fee`
+  10000 (1%), `tickSpacing` 200, `hooks` = the Graduator. `Graduator.poolKey(coin)`
+  returns it.
+- One full-range position, owned by the Graduator and never removed: the
+  liquidity is locked. Fees go 70% to the creator, 30% to the platform.
+- The pool opens at the curve's final price; unused reserve coins are sent to
+  `0x…dEaD`.
+- After graduation the curve no longer trades. Trades are ordinary v4 `Swap`
+  events on the PoolManager for that `poolId`; Router trades still emit the
+  Router `Swap` with USDG amounts, and `curve.spotPrice()` reads the pool.
+- The Router's `buy` / `sell` / `buyPosted` / `sellPosted` work unchanged: they
+  route to the pool once the coin has graduated. `Router.quotePool(curve,
+  pTokenIn, amount)` (call it with `eth_call`) quotes a pool trade.
 
 ## Letting users trade
 
@@ -173,7 +193,7 @@ GET https://api.polypad.trade/v1/swap
   "minOut": "788505610803931795692420",
   "validUntil": 1790452040,
   "approval": { "to": "0x5fc5…1d168", "data": "0x095ea7b3…", "value": "0" },
-  "tx": { "to": "0x8E16…A6AC", "data": "0x00be6a11…", "value": "0", "chainId": 4663 }
+  "tx": { "to": "0x12d6…E621", "data": "0x00be6a11…", "value": "0", "chainId": 4663 }
 }
 ```
 
@@ -182,8 +202,15 @@ seconds). Errors come back as `{"error": "..."}` with HTTP 4xx: the market is
 paused before its end date, the trade is too large for the Polymarket book, the
 odds are moving fast, and so on.
 
-Selling a coin always works while its market is live, including after buys
-pause. After the market resolves, the pToken pays its payout.
+Selling a coin always works, including after buys pause for the market's end
+date. After the market resolves YES the coin keeps trading both ways: the
+pToken is then worth $1 and mints and redeems at $1 with no quote needed
+(0.25% in, 0.5% out); after NO it is worth $0 and only sells remain.
+
+If the exchange's USDG float is ever short, a sell still goes through: the
+seller is owed the exact amount (`PExchange.Queued(ticket, to, amount)`) and is
+paid automatically, oldest first, as the float refills (usually within a
+minute; `ClaimPaid`).
 
 ## Contract source
 
