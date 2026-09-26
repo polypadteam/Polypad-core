@@ -7,8 +7,7 @@ holders and graduation, and to let their users buy and sell.
 Chain: **Robinhood Chain** (EVM, chain id `4663`). Quote currency for users:
 **USDG** (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`, 6 decimals).
 
-> The addresses below are the live pilot. Production addresses are published
-> here at launch; the events and the pricing method stay the same.
+> Launch contracts, deployed at block 73,367,899 and verified on Sourcify.
 
 ## What a Polypad coin is
 
@@ -26,12 +25,12 @@ times the payout ($1 or $0 each).
 
 ## Contracts
 
-| Contract | Address (pilot) | Role |
+| Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0xBA46ae2290974F2B6Ada9067A40Ea8e95f215894` | Creates coins; emits `Launched` |
-| Router | `0x4028fa0bbe7AfE3eFDaE0CcAE65F024E7D1Ee4f6` | USDG in and out; emits `Bought` / `Sold` with USDG amounts |
-| PExchange | `0x073481C62e13D52c7D07d3292626962cA24dD7bE` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0xa82d05f9aF45E790B145bb3B276A0D7438476943` | Verifies signed prices |
+| LaunchFactory | `0x1ac2e915Be970EeF736E92B5A0930de47Cc7D38F` | Creates coins; emits `Launched` |
+| Router | `0x8E160816a5bB551410B1E60BCEB3A84B14bFA6AC` | USDG in and out; emits `Bought` / `Sold` with USDG amounts |
+| PExchange | `0x74a9944e20529c8fF5aA3659E536e6292Ea0765e` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0x220fbf8f08833D1D1a6ca1ADafF4367a29EDb488` | Verifies signed prices |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
 outcome has one **pToken**, shared by every coin on that outcome.
@@ -174,7 +173,7 @@ GET https://api.polypad.trade/v1/swap
   "minOut": "788505610803931795692420",
   "validUntil": 1790452040,
   "approval": { "to": "0x5fc5…1d168", "data": "0x095ea7b3…", "value": "0" },
-  "tx": { "to": "0x4028…e4f6", "data": "0x00be6a11…", "value": "0", "chainId": 4663 }
+  "tx": { "to": "0x8E16…A6AC", "data": "0x00be6a11…", "value": "0", "chainId": 4663 }
 }
 ```
 
