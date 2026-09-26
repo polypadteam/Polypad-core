@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.28;
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import {PExchange} from "../src/PExchange.sol";
+import {PriceOracle} from "../src/PriceOracle.sol";
+import {MockUSDG, PolypadBase} from "./Polypad.t.sol";
+
+/// @dev What the owner can and cannot do, and how fast.
+contract GovernanceTest is PolypadBase {
+    address internal newSigner = makeAddr("newSigner");
+    address internal poster = makeAddr("poster");
+
+    function test_aNewSignerWaitsTwoDays() public {
+        vm.prank(owner);
+        oracle.setSigner(newSigner);
+        assertEq(oracle.signer(), signer, "old signer still in charge");
+
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.NotYet.selector, block.timestamp + 2 days));
+        oracle.acceptSigner();
+
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(owner);
+        oracle.acceptSigner();
+        assertEq(oracle.signer(), newSigner);
+    }
+
+    function test_revokingTheSignerIsImmediate() public {
+        vm.prank(owner);
+        oracle.setSigner(address(0));
+        assertEq(oracle.signer(), address(0));
+        // No quote can verify now: the signed path is closed.
+        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
+        vm.expectRevert(PriceOracle.BadSignature.selector);
+        oracle.verify(q, sig, BUY);
+    }
+
+    function test_posterFirstSetIsImmediateChangesWait() public {
+        vm.startPrank(owner);
+        oracle.setPoster(poster);
+        assertEq(oracle.poster(), poster);
+        oracle.setPoster(newSigner);
+        assertEq(oracle.poster(), poster, "a change waits");
+        vm.warp(block.timestamp + 2 days);
+        oracle.acceptPoster();
+        assertEq(oracle.poster(), newSigner);
+        oracle.setPoster(address(0));
+        assertEq(oracle.poster(), address(0), "revoke is immediate");
+        vm.stopPrank();
+    }
+
+    function test_theBridgeDepositChangesOnlyWithDelay() public {
+        address attacker = makeAddr("attacker");
+        vm.prank(owner);
+        vm.expectRevert(PExchange.BridgeChangeDelayed.selector);
+        exchange.setRoles(keeper, address(factory), attacker);
+
+        vm.prank(owner);
+        exchange.proposeBridgeDeposit(attacker);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.NotYet.selector, block.timestamp + 2 days));
+        exchange.acceptBridgeDeposit();
+        assertEq(exchange.bridgeDeposit(), bridge);
+
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(owner);
+        exchange.acceptBridgeDeposit();
+        assertEq(exchange.bridgeDeposit(), attacker);
+    }
+
+    function test_rescueNeverTouchesTheFloatOrPTokens() public {
+        _launch(ID);
+        address p = address(exchange.pTokenOf(ID));
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.NotRescuable.selector, address(usdg)));
+        exchange.rescue(IERC20(address(usdg)), owner, 1);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.NotRescuable.selector, p));
+        exchange.rescue(IERC20(p), owner, 1);
+        vm.stopPrank();
+
+        MockUSDG stray = new MockUSDG();
+        stray.mint(address(exchange), 5);
+        vm.prank(owner);
+        exchange.rescue(IERC20(address(stray)), alice, 5);
+        assertEq(stray.balanceOf(alice), 5);
+    }
+
+    function test_ownershipMovesInTwoSteps() public {
+        address next = makeAddr("next");
+        vm.prank(owner);
+        exchange.transferOwnership(next);
+        assertEq(exchange.owner(), owner, "nothing moves until accepted");
+        vm.prank(next);
+        exchange.acceptOwnership();
+        assertEq(exchange.owner(), next);
+    }
+}

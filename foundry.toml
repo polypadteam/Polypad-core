@@ -1,0 +1,26 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.28"
+optimizer = true
+optimizer_runs = 1_000_000
+via_ir = false
+evm_version = "cancun"
+fs_permissions = [{ access = "read-write", path = "./deployments" }]
+
+remappings = [
+  "@openzeppelin/=lib/openzeppelin-contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
+
+[rpc_endpoints]
+robinhood = "https://rpc.mainnet.chain.robinhood.com"
+
+# Stateful fuzzing. `fail_on_revert = false` because the handler deliberately
+# drives the contract into states where calls SHOULD revert; the invariants are
+# what must never break regardless of which calls landed.
+[invariant]
+runs = 256
+depth = 64
+fail_on_revert = false
