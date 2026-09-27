@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {PExchange} from "../src/PExchange.sol";
 import {PriceOracle} from "../src/PriceOracle.sol";
+import {PToken} from "../src/PToken.sol";
 import {MockUSDG, PolypadBase} from "./Polypad.t.sol";
 
 /// @dev What the owner can and cannot do, and how fast.
@@ -95,5 +96,30 @@ contract GovernanceTest is PolypadBase {
         vm.prank(next);
         exchange.acceptOwnership();
         assertEq(exchange.owner(), next);
+    }
+
+    function test_keeperNamesShareTokensAfterTheirOutcome() public {
+        _launch(ID);
+        PToken p = exchange.pTokenOf(ID);
+        assertEq(p.name(), "Polypad Share");
+        assertEq(p.symbol(), "pSHARE");
+        address at = exchange.pTokenAddress(ID);
+
+        vm.expectRevert(PExchange.OnlyKeeper.selector);
+        exchange.setShareLabel(ID, "fake", "FAKE");
+        vm.expectRevert(PToken.OnlyExchange.selector);
+        p.setLabel("fake", "FAKE");
+        vm.expectRevert(PExchange.BadParams.selector);
+        vm.prank(keeper);
+        exchange.setShareLabel(ID_B, "no token yet", "X");
+
+        vm.prank(keeper);
+        exchange.setShareLabel(ID, "Polypad YES \u00b7 Fed holds rates", "pYES-FEDHOLD");
+        assertEq(p.name(), "Polypad YES \u00b7 Fed holds rates");
+        assertEq(p.symbol(), "pYES-FEDHOLD");
+        assertEq(address(p), at); // the address does not depend on the name
+        vm.prank(owner);
+        exchange.setShareLabel(ID, "Polypad YES \u00b7 Fed holds", "pYES-FED");
+        assertEq(p.symbol(), "pYES-FED");
     }
 }

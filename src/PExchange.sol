@@ -157,6 +157,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     event ClaimPaid(uint256 indexed ticket, address indexed to, uint256 amount);
     event SettleFeeSet(uint16 settleFeeBps);
     event MaxPriceSet(uint256 indexed positionId, uint64 maxPrice);
+    event ShareLabelSet(uint256 indexed positionId, string name, string symbol);
 
     error OnlyKeeper();
     error OnlyFactory();
@@ -393,6 +394,15 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     function setMaxUnbacked(uint256 positionId, uint256 cap) external onlyOwner {
         maxUnbackedOverride[positionId] = cap;
+    }
+
+    /// @notice Name a market's share token after its outcome. Keeper or owner.
+    function setShareLabel(uint256 positionId, string calldata name_, string calldata symbol_) external {
+        if (msg.sender != keeper && msg.sender != owner()) revert OnlyKeeper();
+        PToken p = pTokenOf[positionId];
+        if (address(p) == address(0) || bytes(name_).length > 64 || bytes(symbol_).length > 16) revert BadParams();
+        p.setLabel(name_, symbol_);
+        emit ShareLabelSet(positionId, name_, symbol_);
     }
 
     /// @notice Lift (or reset, with 0) one market's mint ceiling. At most 99c.

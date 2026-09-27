@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {BondingCurve} from "../src/BondingCurve.sol";
 import {Coin} from "../src/Coin.sol";
+import {FeeVault} from "../src/FeeVault.sol";
 import {Graduator} from "../src/Graduator.sol";
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {LaunchFactory} from "../src/LaunchFactory.sol";
@@ -50,6 +51,7 @@ contract PolypadBase is Test {
     LaunchFactory internal factory;
     Router internal router;
     Graduator internal graduator;
+    FeeVault internal vault;
     /// @dev Uniswap's PoolManager, its Robinhood Chain bytecode at its Robinhood Chain address.
     IPoolManager internal poolManager = IPoolManager(0x8366a39CC670B4001A1121B8F6A443A643e40951);
 
@@ -68,9 +70,11 @@ contract PolypadBase is Test {
         deployCodeTo("Graduator.sol:Graduator", abi.encode(poolManager, address(factory)), hookAt);
         graduator = Graduator(hookAt);
         router = new Router(IERC20(address(usdg)), exchange, poolManager);
+        vault = new FeeVault(address(factory), exchange, address(poolManager));
         vm.startPrank(owner);
         exchange.setRoles(keeper, address(factory), bridge);
         factory.setGraduator(graduator);
+        factory.setFeeVault(vault);
         vm.stopPrank();
 
         // A deep float so redemptions never fail for lack of USDG in these tests.
@@ -122,9 +126,13 @@ contract PolypadBase is Test {
     }
 
     function _launch(uint256 id) internal returns (Coin coin, BondingCurve curve) {
+        return _launch(id, 0);
+    }
+
+    function _launch(uint256 id, uint16 holdersBps) internal returns (Coin coin, BondingCurve curve) {
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(id, BUY);
         vm.prank(creator);
-        (coin, curve) = factory.launch(id, "No Hike", "NOHIKE", "ipfs://x", q, sig);
+        (coin, curve) = factory.launch(id, "No Hike", "NOHIKE", "ipfs://x", holdersBps, q, sig);
     }
 
     function _buy(address who, BondingCurve c, uint256 usdgIn) internal returns (uint256 coins, uint256 refund) {
@@ -184,7 +192,7 @@ contract LaunchTest is PolypadBase {
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
         vm.warp(block.timestamp + 16);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.QuoteExpired.selector, q.validUntil));
-        factory.launch(ID, "No Hike", "NOHIKE", "ipfs://x", q, sig);
+        factory.launch(ID, "No Hike", "NOHIKE", "ipfs://x", 0, q, sig);
 
         _post(ID, 970_000);
         vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, 970_000));
@@ -199,7 +207,7 @@ contract LaunchTest is PolypadBase {
     function test_launchRefusesQuoteForAnotherMarket() public {
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID_B, BUY);
         vm.expectRevert(abi.encodeWithSelector(LaunchFactory.QuoteForOtherMarket.selector, ID_B, ID));
-        factory.launch(ID, "No Hike", "NOHIKE", "ipfs://x", q, sig);
+        factory.launch(ID, "No Hike", "NOHIKE", "ipfs://x", 0, q, sig);
     }
 }
 
@@ -228,7 +236,7 @@ contract TradeTest is PolypadBase {
         // Curve holds the shares net of fees; fees went 70/30 to creator and platform.
         uint256 fee = expectedShares / 100;
         assertEq(curve.trackedQuote(), expectedShares - fee);
-        assertEq(p.balanceOf(creator), fee * 7_000 / 10_000);
+        assertEq(vault.owed(address(p), creator), fee * 7_000 / 10_000);
         assertEq(p.balanceOf(platform), fee - fee * 7_000 / 10_000);
     }
 
@@ -243,7 +251,7 @@ contract TradeTest is PolypadBase {
         // Only the fee shares remain in circulation.
         assertEq(
             p.totalSupply(),
-            p.balanceOf(creator) + p.balanceOf(platform) + p.balanceOf(address(exchange)) + curve.trackedQuote()
+            p.balanceOf(address(vault)) + p.balanceOf(platform) + p.balanceOf(address(exchange)) + curve.trackedQuote()
         );
     }
 
@@ -390,8 +398,10 @@ contract TradeTest is PolypadBase {
 
     function test_absorbBurnsPTokenSentToTheExchange() public {
         _buy(alice, curve, 600e6);
-        vm.prank(creator);
+        vm.startPrank(creator);
+        vault.withdraw(address(p), creator);
         p.transfer(address(exchange), 1e6);
+        vm.stopPrank();
         uint256 held = p.balanceOf(address(exchange));
         uint256 supply = p.totalSupply();
         assertGt(held, 0);

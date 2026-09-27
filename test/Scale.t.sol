@@ -82,15 +82,15 @@ contract ScaleTest is PolypadBase {
             (uint256 c,) = _buy(bob, curve, 1_000e6);
             _sell(bob, curve, c);
         }
-        uint256 creatorBefore = p.balanceOf(creator);
+        uint256 creatorBefore = vault.owed(address(p), creator);
         uint256 platformBefore = p.balanceOf(platform);
         graduator.collect(address(coin));
-        uint256 toCreator = p.balanceOf(creator) - creatorBefore;
+        uint256 toCreator = vault.owed(address(p), creator) - creatorBefore;
         uint256 toPlatform = p.balanceOf(platform) - platformBefore;
         // ~$5k of pToken bought through the pool: ~1% of it in pToken fees.
         assertGt(toCreator, 0);
         assertApproxEqRel(toCreator * 3, toPlatform * 7, 0.001e18);
-        assertGt(coin.balanceOf(creator), 0); // sell-side fees come in coins
+        assertGt(vault.owed(address(coin), creator), 0); // sell-side fees come in coins
     }
 
     function test_nobodyElseCanCreateAPolypadPool() public {

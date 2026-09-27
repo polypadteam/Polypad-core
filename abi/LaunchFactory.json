@@ -79,6 +79,19 @@
   },
   {
     "type": "function",
+    "name": "feeVault",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract FeeVault"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "gradUsd",
     "inputs": [],
     "outputs": [
@@ -145,6 +158,11 @@
         "name": "metadataURI",
         "type": "string",
         "internalType": "string"
+      },
+      {
+        "name": "holdersBps",
+        "type": "uint16",
+        "internalType": "uint16"
       },
       {
         "name": "q",
@@ -277,6 +295,19 @@
   },
   {
     "type": "function",
+    "name": "setFeeVault",
+    "inputs": [
+      {
+        "name": "feeVault_",
+        "type": "address",
+        "internalType": "contract FeeVault"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setGraduator",
     "inputs": [
       {
@@ -316,6 +347,19 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeeVaultSet",
+    "inputs": [
+      {
+        "name": "feeVault",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -378,6 +422,12 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "holdersBps",
+        "type": "uint16",
+        "indexed": false,
+        "internalType": "uint16"
       }
     ],
     "anonymous": false
@@ -419,6 +469,17 @@
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "BadHoldersShare",
+    "inputs": [
+      {
+        "name": "holdersBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ]
   },
   {
     "type": "error",

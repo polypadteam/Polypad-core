@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import {FeeVault} from "./FeeVault.sol";
 import {Graduator} from "./Graduator.sol";
 
 /**
@@ -32,8 +33,9 @@ import {Graduator} from "./Graduator.sol";
  * burned, and the curve closes. If graduation fails for any reason the buy still
  * succeeds, the curve stays sold out, and anyone can retry with `graduate()`.
  *
- * Fees are 1% of the pToken side of every trade: 70% to the creator, 30% to the
- * platform. The pool charges the same 1% and splits it the same way.
+ * Fees are 1% of the pToken side of every trade: 70% to the creator (paid into
+ * the FeeVault, which credits the creator and, if they chose, the holders), 30%
+ * to the platform. The pool charges the same 1% and splits it the same way.
  */
 contract BondingCurve is ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -49,6 +51,7 @@ contract BondingCurve is ReentrancyGuard {
     address public immutable platform;
     address public immutable factory;
     Graduator public immutable graduator;
+    FeeVault public immutable feeVault;
     /// @notice Virtual pToken reserve, 6 decimals. Never held.
     uint256 public immutable phantom;
 
@@ -85,8 +88,10 @@ contract BondingCurve is ReentrancyGuard {
         address creator_,
         address platform_,
         uint256 phantom_,
-        Graduator graduator_
+        Graduator graduator_,
+        FeeVault feeVault_
     ) {
+        feeVault = feeVault_;
         pToken = pToken_;
         graduator = graduator_;
         exchange = exchange_;
@@ -230,7 +235,7 @@ contract BondingCurve is ReentrancyGuard {
         uint256 poolCoins = (reserved * q) / (phantom + q);
         coin.forceApprove(address(graduator), poolCoins);
         pToken.forceApprove(address(graduator), q);
-        try graduator.graduate(coin, pToken, poolCoins, q, creator, platform) returns (bytes32 poolId) {
+        try graduator.graduate(coin, pToken, poolCoins, q, address(feeVault), platform) returns (bytes32 poolId) {
             graduated = true;
             uint256 burned = trackedTokens - poolCoins;
             trackedQuote = 0;
@@ -247,7 +252,10 @@ contract BondingCurve is ReentrancyGuard {
     function _payFee(uint256 fee) internal {
         if (fee == 0) return;
         uint256 toCreator = (fee * CREATOR_SHARE_BPS) / BPS;
-        if (toCreator > 0) pToken.safeTransfer(creator, toCreator);
+        if (toCreator > 0) {
+            pToken.forceApprove(address(feeVault), toCreator);
+            feeVault.deposit(address(coin), address(pToken), toCreator);
+        }
         if (fee > toCreator) pToken.safeTransfer(platform, fee - toCreator);
     }
 }

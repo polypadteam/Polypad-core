@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {BondingCurve} from "./BondingCurve.sol";
 import {Coin} from "./Coin.sol";
+import {FeeVault} from "./FeeVault.sol";
 import {Graduator} from "./Graduator.sol";
 import {PExchange} from "./PExchange.sol";
 import {PriceOracle} from "./PriceOracle.sol";
@@ -34,6 +35,8 @@ contract LaunchFactory is Ownable2Step {
 
     /// @notice Where new curves graduate. Existing curves keep the one they were made with.
     Graduator public graduator;
+    /// @notice Where creator fees go. Existing curves keep the one they were made with.
+    FeeVault public feeVault;
 
     address[] public curves;
     mapping(address => bool) public isCurve;
@@ -45,14 +48,17 @@ contract LaunchFactory is Ownable2Step {
         address curve,
         address pToken,
         uint256 launchPrice,
-        uint256 phantom
+        uint256 phantom,
+        uint16 holdersBps
     );
     event ConfigSet(address platform, uint256 gradUsd);
     event GraduatorSet(address graduator);
+    event FeeVaultSet(address feeVault);
 
     error QuoteForOtherMarket(uint256 quoted, uint256 positionId);
     error PriceOutOfBand(uint256 price);
     error NoGraduator();
+    error BadHoldersShare(uint16 holdersBps);
 
     constructor(address owner_, PExchange exchange_, PriceOracle oracle_, address platform_) Ownable(owner_) {
         exchange = exchange_;
@@ -71,29 +77,68 @@ contract LaunchFactory is Ownable2Step {
         emit GraduatorSet(address(graduator_));
     }
 
+    function setFeeVault(FeeVault feeVault_) external onlyOwner {
+        feeVault = feeVault_;
+        emit FeeVaultSet(address(feeVault_));
+    }
+
+    /**
+     * @param holdersBps the part of the creator's fees paid to the coin's holders
+     *        instead of the creator, 0 to 10,000. Fixed for the life of the coin.
+     */
     function launch(
         uint256 positionId,
         string calldata name,
         string calldata symbol,
         string calldata metadataURI,
+        uint16 holdersBps,
         PriceOracle.Quote calldata q,
         bytes calldata sig
     ) external returns (Coin coin, BondingCurve curve) {
         if (q.positionId != positionId) revert QuoteForOtherMarket(q.positionId, positionId);
-        if (address(graduator) == address(0)) revert NoGraduator();
-        uint256 price = _launchPrice(q, sig);
-        PToken p = exchange.ensurePToken(positionId);
+        if (address(graduator) == address(0) || address(feeVault) == address(0)) revert NoGraduator();
+        if (holdersBps > 10_000) revert BadHoldersShare(holdersBps);
+        return _deploy(positionId, _launchPrice(q, sig), name, symbol, metadataURI, holdersBps);
+    }
 
+    function _emitLaunched(
+        uint256 positionId,
+        Coin coin,
+        BondingCurve curve,
+        PToken p,
+        uint256 price,
+        uint16 holdersBps
+    ) internal {
+        emit Launched(
+            positionId, msg.sender, address(coin), address(curve), address(p), price, curve.phantom(), holdersBps
+        );
+    }
+
+    function _deploy(
+        uint256 positionId,
+        uint256 price,
+        string calldata name,
+        string calldata symbol,
+        string calldata metadataURI,
+        uint16 holdersBps
+    ) internal returns (Coin coin, BondingCurve curve) {
+        PToken p = exchange.ensurePToken(positionId);
         // Target in shares = gradUsd / price; phantom = 0.4x target.
         curve = new BondingCurve(
-            IERC20(address(p)), address(exchange), msg.sender, platform, (gradUsd * 2e6) / (price * 5), graduator
+            IERC20(address(p)),
+            address(exchange),
+            msg.sender,
+            platform,
+            (gradUsd * 2e6) / (price * 5),
+            graduator,
+            feeVault
         );
-        coin = new Coin(name, symbol, metadataURI, address(curve));
+        coin = new Coin(name, symbol, metadataURI, address(curve), holdersBps > 0 ? address(feeVault) : address(0));
+        feeVault.register(address(coin), address(curve), address(graduator), address(p), msg.sender, holdersBps);
         curve.initialize(IERC20(address(coin)));
         curves.push(address(curve));
         isCurve[address(curve)] = true;
-
-        emit Launched(positionId, msg.sender, address(coin), address(curve), address(p), price, curve.phantom());
+        _emitLaunched(positionId, coin, curve, p, price, holdersBps);
     }
 
     function _launchPrice(PriceOracle.Quote calldata q, bytes calldata sig) internal view returns (uint256) {

@@ -7,7 +7,7 @@ holders and graduation, and to let their users buy and sell.
 Chain: **Robinhood Chain** (EVM, chain id `4663`). Quote currency for users:
 **USDG** (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`, 6 decimals).
 
-> Launch contracts, deployed at block 73,852,569 and verified on Sourcify.
+> Launch contracts, deployed at block 73,903,689 and verified on Sourcify.
 
 ## What a Polypad coin is
 
@@ -27,15 +27,20 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x4eCeF7fDd459eABC99CE347F4cB1f98ADB43F343` | Creates coins; emits `Launched` |
-| Router | `0x752493C92C63994987cC2dCE76d8cef863d95B5C` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x60cDBd044e74Eb332dd3d08B478A82dbf3E19D2C` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0xb0efC61E3e1Afb1c0F990568127AfB6c9d0116E4` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0xaAc95223a2dA3A87Bb5BeE4012f2878564f82000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| LaunchFactory | `0x8ca6a523a02e9caA8587eaCC577B8C432036577A` | Creates coins; emits `Launched` |
+| Router | `0xEf23A4B7e806580a0a5D87E52fDAdA234837E356` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0x8Cf488ee4084e922e57a935FA63136ff4FEfEd20` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0x0A071A1C3DE334307Fb43d0d91e78564990338BA` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0xCE39cD9b7590e82591CF9d6e00ecD180feB82000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| FeeVault | `0x2b7aB13bfEDD8F4150e4339ea9bACE5280504D12` | Creator fees and holder dividends |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
-outcome has one **pToken**, shared by every coin on that outcome.
+outcome has one **pToken**, shared by every coin on that outcome. Its name and
+symbol say which outcome it is ("Polypad YES · <question>", `pYES-<KEY>`), set
+by us shortly after its first launch (`ShareLabelSet` on the PExchange); until
+then it reads "Polypad Share" / `pSHARE`. `positionId()` is the Polymarket CLOB
+token id either way.
 
 ## Events
 
@@ -49,9 +54,10 @@ event Launched(
     address curve,
     address pToken,
     uint256 launchPrice,        // USDG per share at launch, 6 decimals
-    uint256 phantom             // curve's virtual pToken reserve, 6 decimals
+    uint256 phantom,            // curve's virtual pToken reserve, 6 decimals
+    uint16 holdersBps           // part of the creator's fees paid to holders (0-10000)
 );
-// topic0 0xa671a0a22ea77018ebc904e165cc9077bf00f89927f3157081cbc5d2c2676cb2
+// topic0 0x1b54aa9fb65870fb610be22a8f0068f9892f3395cb427fa168858ee7af87bd88
 ```
 
 Start watching `curve` for trades and `coin` for transfers from here.
@@ -144,7 +150,8 @@ event Graduated(address indexed coin, address indexed pToken, bytes32 indexed po
   10000 (1%), `tickSpacing` 200, `hooks` = the Graduator. `Graduator.poolKey(coin)`
   returns it.
 - One full-range position, owned by the Graduator and never removed: the
-  liquidity is locked. Fees go 70% to the creator, 30% to the platform.
+  liquidity is locked. Fees go 70% to the creator side (the FeeVault, below),
+  30% to the platform.
 - The pool opens at the curve's final price; unused reserve coins are sent to
   `0x…dEaD`.
 - After graduation the curve no longer trades. Trades are ordinary v4 `Swap`
@@ -153,6 +160,41 @@ event Graduated(address indexed coin, address indexed pToken, bytes32 indexed po
 - The Router's `buy` / `sell` / `buyPosted` / `sellPosted` work unchanged: they
   route to the pool once the coin has graduated. `Router.quotePool(curve,
   pTokenIn, amount)` (call it with `eth_call`) quotes a pool trade.
+
+## Creator fees and holder dividends — FeeVault
+
+The creator's 70% of every fee, on the curve and in the pool, goes to the
+FeeVault. At launch the creator chooses `holdersBps`, the part of it paid to the
+coin's holders instead, fixed for the life of the coin:
+
+- The creator's part is claimable any time: `withdraw(asset, to)` as pToken, or
+  `withdrawUsd(pToken, to, minOut, quote, sig)` as USDG in one transaction (our
+  `/v1/claim?account=..&asset=<pToken>&usd=1` builds it).
+- The holders' part in pToken streams to holders over an hour, by balance; the
+  holders' part of the pool's coin-side fees is burned.
+- Holders are paid automatically every hour once owed $1 or more, in the
+  coin's own market shares (its pToken: the YES or NO it is built on), like
+  Pons pays its underlying. Whoever holds the coin earns, wherever they bought
+  it (our site, a terminal, the pool directly): the vault follows balances, not
+  venues. `pending(coin, holder)` reads what a holder is owed; `claim(coin, to)`
+  pays it now.
+- A share is worth the outcome's price, and $1 or $0 once the market settles.
+  `/v1/redeem?account=..&pToken=..[&amount=]` builds a cash-out of any shares to
+  USDG (`PExchange.redeem` at a pricer quote, or at the payout once settled).
+- A holder-share coin notifies the vault on every transfer, so its transfers
+  cost about 55k more gas. `Coin.holderBook()` is the vault for those coins and
+  zero for plain ones. The pool, the curve and the burn address never earn.
+
+```solidity
+event Deposited(address indexed coin, address indexed asset, uint256 toPayee, uint256 toHolders);
+event HolderPaid(address indexed coin, address indexed holder, uint256 amount, bool cashedOut);
+event PayeeSet(address indexed coin, address indexed payee);
+```
+
+Transactions from our API carry a `gas` limit with headroom: send it as given.
+A holder-share coin's gas depends on when its dividend stream last released,
+so an estimate taken a block earlier can fall a little short. Only gas used is
+charged on Robinhood Chain.
 
 ## Letting users trade
 
@@ -211,6 +253,34 @@ If the exchange's USDG float is ever short, a sell still goes through: the
 seller is owed the exact amount (`PExchange.Queued(ticket, to, amount)`) and is
 paid automatically, oldest first, as the float refills (usually within a
 minute; `ClaimPaid`).
+
+## Live data and charts
+
+**Candles** (dollar OHLCV, the price moves with trades and with the odds):
+
+```
+GET /v1/coins/<coin>/candles?tf=1s|1m|5m|1h|1d&limit=300      latest window, forming candle included
+GET /v1/coins/<coin>/candles?tf=1m&from=<unix s>&to=<unix s>   history (at most 1,500 candles)
+```
+
+`GET /v1/coins/<coin>` lists the `timeframes` worth showing at the coin's age
+(1s always; 1m, 5m, 1h, 1d once the coin has lived five of their candles).
+Closed history windows never change and are served with an immutable cache
+header; the latest window refreshes about once per candle second.
+
+**Streaming**, either transport, same events:
+
+```
+GET /v1/stream?coins=0x..,0x..&trades=1        Server-Sent Events (up to 20 coins)
+wss://…/v1/ws   {"op":"subscribe","channel":"coin","address":"0x…"}   (up to 50 coins)
+                {"op":"subscribe","channel":"trades"}
+```
+
+- `price` `{coin, priceUsd, market:{id,bid,ask,mid}}`: on subscribe, then on every trade or odds move (at most 4 per second per coin).
+- `trade` `{coin, side, trader, coins, usdg, amountUsd, amountCoins, priceShares, timestamp, tx}`.
+
+To draw a live chart: load the latest window, then update the last candle
+from `price` events and start a new one when the bucket rolls over.
 
 ## Contract source
 

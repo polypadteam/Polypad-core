@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 
+import {FeeVault} from "../src/FeeVault.sol";
 import {Graduator} from "../src/Graduator.sol";
 import {LaunchFactory} from "../src/LaunchFactory.sol";
 import {PExchange} from "../src/PExchange.sol";
@@ -74,54 +75,83 @@ contract Deploy is Script {
         require(address(g) == expected, "graduator address");
     }
 
+    function _wire(LaunchFactory factory, PExchange exchange, IPoolManager poolManager)
+        internal
+        returns (Graduator graduator, FeeVault feeVault)
+    {
+        graduator = _graduator(poolManager, address(factory));
+        factory.setGraduator(graduator);
+        feeVault = new FeeVault(address(factory), exchange, address(poolManager));
+        factory.setFeeVault(feeVault);
+    }
+
+    struct Out {
+        IERC20 usdg;
+        PriceOracle oracle;
+        PExchange exchange;
+        LaunchFactory factory;
+        Router router;
+        Graduator graduator;
+        FeeVault feeVault;
+        address owner;
+        uint256 fromBlock;
+    }
+
     function run() external {
-        address priceSigner = vm.envAddress("PRICE_SIGNER");
-        address keeper = vm.envAddress("KEEPER");
         address platform = vm.envOr("PLATFORM", address(0));
-        address bridgeDeposit = vm.envOr("BRIDGE_DEPOSIT", address(0));
-        uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
         IPoolManager poolManager = IPoolManager(vm.envOr("POOL_MANAGER", RH_POOL_MANAGER));
-        uint256 outflowCap = vm.envOr("OUTFLOW_CAP", uint256(1_000_000e6));
 
         vm.startBroadcast();
-        address owner = msg.sender;
-        uint256 fromBlock = block.number;
-
-        IERC20 usdg = vm.envOr("DEV_USDG", false) ? IERC20(address(new DevUSDG(owner))) : IERC20(vm.envAddress("USDG"));
-
-        PriceOracle oracle = new PriceOracle(owner, priceSigner, keeper);
-        PExchange exchange = new PExchange(owner, usdg, oracle, keeper);
-        if (platform == address(0)) platform = address(exchange);
-        LaunchFactory factory = new LaunchFactory(owner, exchange, oracle, platform);
-        Graduator graduator = _graduator(poolManager, address(factory));
-        factory.setGraduator(graduator);
-        Router router = new Router(usdg, exchange, poolManager);
-        exchange.setRoles(keeper, address(factory), bridgeDeposit);
-        exchange.setOutflowCap(outflowCap);
-        exchange.setPostedParams(150, vm.envOr("POSTED_MAX_TRADE", uint256(5_000e6)), vm.envOr("POSTED_MAX_BLOCK", uint256(20_000e6)));
-        oracle.setPoster(keeper);
-        if (gradUsd != 6_000e6) factory.setConfig(platform, gradUsd);
+        Out memory o;
+        o.owner = msg.sender;
+        o.fromBlock = block.number;
+        o.usdg = vm.envOr("DEV_USDG", false) ? IERC20(address(new DevUSDG(o.owner))) : IERC20(vm.envAddress("USDG"));
+        o.oracle = new PriceOracle(o.owner, vm.envAddress("PRICE_SIGNER"), vm.envAddress("KEEPER"));
+        o.exchange = new PExchange(o.owner, o.usdg, o.oracle, vm.envAddress("KEEPER"));
+        if (platform == address(0)) platform = address(o.exchange);
+        o.factory = new LaunchFactory(o.owner, o.exchange, o.oracle, platform);
+        (o.graduator, o.feeVault) = _wire(o.factory, o.exchange, poolManager);
+        o.router = new Router(o.usdg, o.exchange, poolManager);
+        _configure(o, platform);
         vm.stopBroadcast();
+        _write(o);
+    }
 
+    function _configure(Out memory o, address platform) internal {
+        address keeper = vm.envAddress("KEEPER");
+        o.exchange.setRoles(keeper, address(o.factory), vm.envOr("BRIDGE_DEPOSIT", address(0)));
+        o.exchange.setOutflowCap(vm.envOr("OUTFLOW_CAP", uint256(1_000_000e6)));
+        o.exchange
+            .setPostedParams(
+                150, vm.envOr("POSTED_MAX_TRADE", uint256(5_000e6)), vm.envOr("POSTED_MAX_BLOCK", uint256(20_000e6))
+            );
+        o.oracle.setPoster(keeper);
+        uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
+        if (gradUsd != 6_000e6) o.factory.setConfig(platform, gradUsd);
+    }
+
+    function _write(Out memory o) internal {
         string memory key = "deployment";
-        vm.serializeAddress(key, "usdg", address(usdg));
-        vm.serializeAddress(key, "oracle", address(oracle));
-        vm.serializeAddress(key, "exchange", address(exchange));
-        vm.serializeAddress(key, "factory", address(factory));
-        vm.serializeAddress(key, "router", address(router));
-        vm.serializeAddress(key, "graduator", address(graduator));
+        vm.serializeAddress(key, "usdg", address(o.usdg));
+        vm.serializeAddress(key, "oracle", address(o.oracle));
+        vm.serializeAddress(key, "exchange", address(o.exchange));
+        vm.serializeAddress(key, "factory", address(o.factory));
+        vm.serializeAddress(key, "router", address(o.router));
+        vm.serializeAddress(key, "graduator", address(o.graduator));
+        vm.serializeAddress(key, "feeVault", address(o.feeVault));
         vm.serializeAddress(key, "poolManager", vm.envOr("POOL_MANAGER", RH_POOL_MANAGER));
-        vm.serializeAddress(key, "owner", owner);
-        string memory json = vm.serializeUint(key, "fromBlock", fromBlock);
+        vm.serializeAddress(key, "owner", o.owner);
+        string memory json = vm.serializeUint(key, "fromBlock", o.fromBlock);
         string memory path = vm.envOr("DEPLOY_OUT", string.concat("deployments/", vm.toString(block.chainid), ".json"));
         vm.writeJson(json, path);
 
-        console2.log("oracle  ", address(oracle));
-        console2.log("exchange", address(exchange));
-        console2.log("factory ", address(factory));
-        console2.log("router  ", address(router));
-        console2.log("graduator", address(graduator));
-        console2.log("usdg    ", address(usdg));
+        console2.log("oracle  ", address(o.oracle));
+        console2.log("exchange", address(o.exchange));
+        console2.log("factory ", address(o.factory));
+        console2.log("router  ", address(o.router));
+        console2.log("graduator", address(o.graduator));
+        console2.log("feeVault", address(o.feeVault));
+        console2.log("usdg    ", address(o.usdg));
         console2.log("written ", path);
     }
 }

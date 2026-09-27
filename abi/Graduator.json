@@ -185,7 +185,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "creator",
+        "name": "feeVault",
         "type": "address",
         "internalType": "address"
       },
@@ -299,7 +299,7 @@
         "internalType": "bytes32"
       },
       {
-        "name": "creator",
+        "name": "feeVault",
         "type": "address",
         "internalType": "address"
       },
