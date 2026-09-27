@@ -152,6 +152,28 @@ contract ScaleTest is PolypadBase {
         assertEq(exchange.queued(), 0);
     }
 
+    function test_aShortFloatPaysWhatItHasAndQueuesTheRest() public {
+        (uint256 a,) = _buy(alice, curve, 1_000e6);
+        // Leave $100 of free float.
+        uint256 free = exchange.freeFloat();
+        vm.prank(keeper);
+        exchange.sendToBridge(free - 100e6);
+
+        uint256 before = usdg.balanceOf(alice);
+        uint256 owed = _sell(alice, curve, a);
+        assertGt(owed, 100e6);
+        // Paid the $100 now, the rest is one claim.
+        assertEq(usdg.balanceOf(alice) - before, 100e6);
+        assertEq(exchange.queued(), owed - 100e6);
+        assertEq(exchange.queueLength(), 1);
+        assertEq(exchange.freeFloat(), 0);
+
+        usdg.mint(address(exchange), owed);
+        exchange.payQueue(1);
+        assertEq(usdg.balanceOf(alice) - before, owed);
+        assertEq(exchange.queued(), 0);
+    }
+
     function test_aMintPaysTheQueue() public {
         (uint256 a,) = _buy(alice, curve, 500e6);
         vm.startPrank(keeper);

@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
@@ -38,7 +39,7 @@ import {PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
  * The pool starts at the curve's final price: the curve passes its whole raise
  * and just enough of its reserved coins to match that price, and burns the rest.
  */
-contract Graduator is IUnlockCallback {
+contract Graduator is IUnlockCallback, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using PoolIdLibrary for PoolKey;
 
@@ -91,6 +92,7 @@ contract Graduator is IUnlockCallback {
      */
     function graduate(IERC20 coin, IERC20 pToken, uint256 coins, uint256 pTokens, address creator, address platform)
         external
+        nonReentrant
         returns (bytes32 poolId)
     {
         if (!IsCurve(factory).isCurve(msg.sender)) revert OnlyCurve();
@@ -116,7 +118,7 @@ contract Graduator is IUnlockCallback {
     /* ------------------------------------------------------------ fees */
 
     /// @notice Pay a graduated coin's accrued pool fees: 70% creator, 30% platform.
-    function collect(address coin) external returns (uint256 fee0, uint256 fee1) {
+    function collect(address coin) external nonReentrant returns (uint256 fee0, uint256 fee1) {
         Pool storage p = pools[coin];
         if (p.liquidity == 0) revert NotGraduated(coin);
         poolManager.unlock(abi.encode(p.key, uint128(0)));

@@ -31,12 +31,13 @@ contract DevUSDG is ERC20 {
  *   PRICE_SIGNER     signs quotes off chain (holds no funds)
  *   KEEPER           reports backing, pauses and settles markets, sends float to the
  *                    bridge, may halt the exchange, and posts prices (poster)
- *   PLATFORM         receives the platform fee
+ *   PLATFORM         receives the platform fee (default: the exchange, so fees build the float)
  *   USDG             collateral; omit with DEV_USDG=1 to deploy a dev token
  *   BRIDGE_DEPOSIT   the desk's Polymarket deposit address (optional; set later with setRoles)
  *   GRAD_USD         graduation target in USDG units (default 6000e6)
  *   POOL_MANAGER     Uniswap v4 PoolManager (default: Robinhood Chain's)
  *   OUTFLOW_CAP      hourly redemption cap in USDG units (default 1,000,000e6)
+ *   POSTED_MAX_TRADE / POSTED_MAX_BLOCK  posted-path limits for terminals (default 5,000e6 / 20,000e6)
  *   DEPLOY_OUT       output path (default deployments/<chainid>.json; set it for local runs)
  *
  * The broadcaster becomes the owner of the oracle, exchange and factory.
@@ -76,7 +77,7 @@ contract Deploy is Script {
     function run() external {
         address priceSigner = vm.envAddress("PRICE_SIGNER");
         address keeper = vm.envAddress("KEEPER");
-        address platform = vm.envAddress("PLATFORM");
+        address platform = vm.envOr("PLATFORM", address(0));
         address bridgeDeposit = vm.envOr("BRIDGE_DEPOSIT", address(0));
         uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
         IPoolManager poolManager = IPoolManager(vm.envOr("POOL_MANAGER", RH_POOL_MANAGER));
@@ -90,12 +91,14 @@ contract Deploy is Script {
 
         PriceOracle oracle = new PriceOracle(owner, priceSigner, keeper);
         PExchange exchange = new PExchange(owner, usdg, oracle, keeper);
+        if (platform == address(0)) platform = address(exchange);
         LaunchFactory factory = new LaunchFactory(owner, exchange, oracle, platform);
         Graduator graduator = _graduator(poolManager, address(factory));
         factory.setGraduator(graduator);
         Router router = new Router(usdg, exchange, poolManager);
         exchange.setRoles(keeper, address(factory), bridgeDeposit);
         exchange.setOutflowCap(outflowCap);
+        exchange.setPostedParams(150, vm.envOr("POSTED_MAX_TRADE", uint256(5_000e6)), vm.envOr("POSTED_MAX_BLOCK", uint256(20_000e6)));
         oracle.setPoster(keeper);
         if (gradUsd != 6_000e6) factory.setConfig(platform, gradUsd);
         vm.stopBroadcast();

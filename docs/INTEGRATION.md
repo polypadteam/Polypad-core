@@ -7,7 +7,7 @@ holders and graduation, and to let their users buy and sell.
 Chain: **Robinhood Chain** (EVM, chain id `4663`). Quote currency for users:
 **USDG** (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`, 6 decimals).
 
-> Launch contracts, deployed at block 73,393,714 and verified on Sourcify.
+> Launch contracts, deployed at block 73,852,569 and verified on Sourcify.
 
 ## What a Polypad coin is
 
@@ -27,11 +27,11 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x134BBE6a933337b12f4FA6AD6996e7052de8E408` | Creates coins; emits `Launched` |
-| Router | `0x12d6eDD87bAf5037D00701cf0803569AbcaDe621` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x6C245EBCee258A5Ac258c430c081F9736e832eAC` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0x838954F170F8b331aeD5406Df28cd7300Abb8DEA` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0xF233B8cB1DA715bC321DC83f809d260e5F0Ce000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| LaunchFactory | `0x4eCeF7fDd459eABC99CE347F4cB1f98ADB43F343` | Creates coins; emits `Launched` |
+| Router | `0x752493C92C63994987cC2dCE76d8cef863d95B5C` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0x60cDBd044e74Eb332dd3d08B478A82dbf3E19D2C` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0xb0efC61E3e1Afb1c0F990568127AfB6c9d0116E4` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0xaAc95223a2dA3A87Bb5BeE4012f2878564f82000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
@@ -193,7 +193,7 @@ GET https://api.polypad.trade/v1/swap
   "minOut": "788505610803931795692420",
   "validUntil": 1790452040,
   "approval": { "to": "0x5fc5…1d168", "data": "0x095ea7b3…", "value": "0" },
-  "tx": { "to": "0x12d6…E621", "data": "0x00be6a11…", "value": "0", "chainId": 4663 }
+  "tx": { "to": "0x7524…5B5C", "data": "0x00be6a11…", "value": "0", "chainId": 4663 }
 }
 ```
 

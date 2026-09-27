@@ -50,10 +50,11 @@ import {PriceOracle} from "./PriceOracle.sol";
  *
  * ## Redemption queue
  *
- * A redemption never fails for lack of float. If the float (less what is
- * already queued) cannot pay it now, the pToken is still burned and the seller
- * gets a claim for the exact USDG owed, paid first in, first out as soon as the
- * float refills: by anyone calling `payQueue`, and by every mint. The keeper
+ * A redemption never fails for lack of float. The seller is paid whatever the
+ * float (less what is already queued) holds right away, the pToken is burned,
+ * and any remainder becomes a claim for the exact USDG still owed, paid first
+ * in, first out as soon as the float refills: by anyone calling `payQueue`,
+ * and by every mint. The keeper
  * bridges from the desk as soon as a claim appears. `sendToBridge` can never
  * touch USDG owed to the queue.
  *
@@ -547,13 +548,15 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         emit Redeemed(id, to, amountIn, out, price);
         if (out == 0) return 0;
         if (queued > 0) _payQueue(3);
-        if (out <= freeFloat()) {
-            usdg.safeTransfer(to, out);
-        } else {
-            // Short of float: the seller is owed exactly `out`, paid in turn.
-            claims.push(Claim(to, uint96(out)));
-            queued += out;
-            emit Queued(claims.length - 1, to, out);
+        // Pay what the float can now; anything it cannot is owed, paid in turn.
+        uint256 free = freeFloat();
+        uint256 now_ = out <= free ? out : free;
+        if (now_ > 0) usdg.safeTransfer(to, now_);
+        if (out > now_) {
+            uint256 rest = out - now_;
+            claims.push(Claim(to, uint96(rest)));
+            queued += rest;
+            emit Queued(claims.length - 1, to, rest);
         }
     }
 
