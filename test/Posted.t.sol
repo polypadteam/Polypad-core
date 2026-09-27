@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {BondingCurve} from "../src/BondingCurve.sol";
 import {Coin} from "../src/Coin.sol";
 import {PExchange} from "../src/PExchange.sol";
@@ -87,8 +88,8 @@ contract PostedTest is PolypadBase {
     }
 
     function test_aQuietMarketStaysTradableWhileThePosterIsAlive() public {
-        // No new post for 30 minutes, but the poster keeps checking in.
-        for (uint256 i; i < 60; ++i) {
+        // No new post for 10 minutes, but the poster keeps checking in.
+        for (uint256 i; i < 20; ++i) {
             vm.warp(block.timestamp + 30);
             _alive();
         }
@@ -141,12 +142,35 @@ contract PostedTest is PolypadBase {
         _buyPosted(alice, 10e6);
     }
 
-    function test_pausedMarketBlocksPostedBuysNotSells() public {
+    function test_pausedMarketClosesThePostedPathBothWays() public {
         uint256 coins = _buyPosted(alice, 50e6);
         _pause(ID);
-        vm.prank(alice);
+        vm.startPrank(alice);
         vm.expectRevert();
         router.buyPosted(curve, 10e6, 0, alice);
+        coin.approve(address(router), coins);
+        vm.expectRevert();
+        router.sellPosted(curve, coins, 0, alice);
+        vm.stopPrank();
+        // A signed quote still sells on a paused market.
+        assertGt(_sell(alice, curve, coins), 0);
+    }
+
+    function test_posterCanExpireAPostItNoLongerStandsBehind() public {
+        uint256 coins = _buyPosted(alice, 50e6);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = ID;
+        vm.expectRevert(PriceOracle.OnlyPoster.selector);
+        oracle.expire(ids);
+        vm.prank(poster);
+        oracle.expire(ids);
+        vm.startPrank(alice);
+        coin.approve(address(router), coins);
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PostStale.selector, ID, 1));
+        router.sellPosted(curve, coins, 0, alice);
+        vm.stopPrank();
+        // The next post reopens it.
+        _postOnChain(ID, 600_000);
         assertGt(_sellPosted(alice, coins), 0);
     }
 
@@ -171,6 +195,7 @@ contract PostedTest is PolypadBase {
         uint256 coins = _buyPosted(alice, 100e6);
         vm.prank(keeper);
         oracle.settle(ID, 1e6);
+        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         // Settled: no post needed, no posted caps, the payout applies.
         vm.warp(block.timestamp + 1 days);
         assertGt(_sellPosted(alice, coins), 0);
@@ -277,5 +302,44 @@ contract PostedTest is PolypadBase {
             assertTrue(posted);
         }
         assertEq(swaps, 1);
+    }
+}
+
+/// The posted path ships closed: a fresh exchange, and the deployment, have no
+/// posted trade size, so every posted mint and redeem reverts until the owner
+/// opens it (a one-step posted fill can be raced; see ExchangeTiming KNOWN tests).
+contract PostedDefaultsTest is PolypadBase {
+    function test_postedPathIsClosedByDefault() public {
+        PExchange fresh = new PExchange(owner, IERC20(address(usdg)), oracle, keeper);
+        assertEq(fresh.postedMaxTrade(), 0);
+        assertEq(fresh.postedMaxPerBlock(), 0);
+        assertEq(fresh.postedSpreadBps(), 150);
+    }
+
+    function test_withDefaultsEveryPostedTradeReverts() public {
+        vm.prank(owner);
+        exchange.setPostedParams(150, 0, 0);
+        address poster = makeAddr("poster");
+        vm.prank(owner);
+        oracle.setPoster(poster);
+        uint256[] memory ids = new uint256[](1);
+        uint64[] memory prices = new uint64[](1);
+        ids[0] = ID;
+        prices[0] = 600_000;
+        vm.prank(poster);
+        oracle.post(ids, prices);
+        (, BondingCurve c) = _launch(ID);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.PostedTradeTooLarge.selector, 1e6, 0));
+        router.buyPosted(c, 1e6, 0, alice);
+        // The signed path is unaffected.
+        (uint256 coins,) = _buy(alice, c, 10e6);
+        assertGt(coins, 0);
+        vm.startPrank(alice);
+        c.coin().approve(address(router), coins);
+        vm.expectRevert();
+        router.sellPosted(c, coins, 0, alice);
+        vm.stopPrank();
+        assertGt(_sell(alice, c, coins), 0);
     }
 }

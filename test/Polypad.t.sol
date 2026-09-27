@@ -23,8 +23,20 @@ contract MockUSDG is ERC20 {
         return 6;
     }
 
+    /// @dev Like the real USDG, which can freeze an address.
+    mapping(address => bool) public frozen;
+
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
+    }
+
+    function freeze(address who) external {
+        frozen[who] = true;
+    }
+
+    function _update(address from, address to, uint256 value) internal override {
+        require(!frozen[from] && !frozen[to], "frozen");
+        super._update(from, to, value);
     }
 }
 
@@ -73,6 +85,9 @@ contract PolypadBase is Test {
         vault = new FeeVault(address(factory), exchange, address(poolManager));
         vm.startPrank(owner);
         exchange.setRoles(keeper, address(factory), bridge);
+        // The posted path ships closed (postedMaxTrade 0); these tests exercise it
+        // at its pre-v7 settings. PostedDefaultsTest checks it is closed by default.
+        exchange.setPostedParams(150, 500e6, 2_000e6);
         factory.setGraduator(graduator);
         factory.setFeeVault(vault);
         vm.stopPrank();
@@ -233,8 +248,8 @@ contract TradeTest is PolypadBase {
         uint256 buyPrice = (uint256(600_000) * 10_025 + 9_999) / 10_000;
         uint256 expectedShares = (uint256(600e6) * 1e6) / buyPrice;
         assertEq(p.totalSupply(), expectedShares);
-        // Curve holds the shares net of the 1.4% fee; the fee went half to the creator side, half to the platform.
-        uint256 fee = expectedShares * 140 / 10_000;
+        // Curve holds the shares net of the 1.4% fee (rounded up); the fee went half to the creator side, half to the platform.
+        uint256 fee = (expectedShares * 140 + 9_999) / 10_000;
         assertEq(curve.trackedQuote(), expectedShares - fee);
         assertEq(vault.owed(address(p), creator), fee * 5_000 / 10_000);
         assertEq(p.balanceOf(platform), fee - fee * 5_000 / 10_000);
@@ -373,6 +388,7 @@ contract TradeTest is PolypadBase {
         (uint256 coins,) = _buy(alice, curve, 600e6);
         vm.prank(keeper);
         oracle.settle(ID, 1e6);
+        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
 
         // Settled redemptions need no quote and pay $1 per share less 0.5%.
         vm.warp(block.timestamp + 1 days);
@@ -389,6 +405,7 @@ contract TradeTest is PolypadBase {
         (uint256 coins,) = _buy(alice, curve, 600e6);
         vm.prank(keeper);
         oracle.settle(ID, 0);
+        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         assertEq(_sell(alice, curve, coins), 0);
         PriceOracle.Quote memory none;
         vm.prank(bob);
@@ -428,6 +445,7 @@ contract TradeTest is PolypadBase {
         oracle.setPaused(ids, true);
         vm.expectRevert(PriceOracle.OnlyKeeper.selector);
         oracle.settle(ID, 1e6);
+        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         vm.expectRevert(PExchange.OnlyKeeper.selector);
         exchange.sendToBridge(1);
         vm.expectRevert(PExchange.OnlyFactory.selector);
@@ -439,9 +457,11 @@ contract TradeTest is PolypadBase {
     function test_settlementIsOneWay() public {
         vm.prank(keeper);
         oracle.settle(ID, 1e6);
+        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         vm.prank(keeper);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.AlreadySettled.selector, ID));
         oracle.settle(ID, 0);
+        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
     }
 
     function test_directTransfersDoNotMovePrice() public {

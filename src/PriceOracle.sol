@@ -62,8 +62,9 @@ contract PriceOracle is Ownable2Step, EIP712 {
 
     struct Status {
         bool paused;
-        bool settled;
         uint64 payout;
+        /// @dev When the payout takes effect; 0 = not settled. See `settle`.
+        uint64 settleAt;
     }
 
     mapping(uint256 positionId => Status) internal statuses;
@@ -79,7 +80,9 @@ contract PriceOracle is Ownable2Step, EIP712 {
     /// @notice Writes posted prices. Holds no funds.
     address public poster;
     /// @notice Seconds a posted price stays usable while the poster is alive.
-    uint32 public maxPostAge = 7_200;
+    uint32 public maxPostAge = 900;
+    /// @dev Set once the first poster is in place; every later poster waits ROLE_DELAY.
+    bool public posterEverSet;
     /// @notice Seconds of poster silence after which no posted price is usable.
     uint32 public maxPosterSilence = 90;
     /// @notice Last time the poster posted or called `alive`.
@@ -91,6 +94,10 @@ contract PriceOracle is Ownable2Step, EIP712 {
 
     /// @notice Delay before a new signer or poster takes effect. Revoking (zero) is immediate.
     uint256 public constant ROLE_DELAY = 2 days;
+    /// @notice A settlement takes effect this long after the keeper records it,
+    ///         and the owner can cancel it meanwhile: one stolen keeper key cannot
+    ///         settle a cheap market at $1 and redeem the float out of it.
+    uint256 public constant SETTLE_DELAY = 1 hours;
 
     /// @notice Signs quotes off chain. Holds no funds.
     address public signer;
@@ -106,8 +113,10 @@ contract PriceOracle is Ownable2Step, EIP712 {
     event PosterProposed(address indexed poster, uint256 effectiveAt);
     event KeeperSet(address indexed keeper);
     event PausedSet(uint256 indexed positionId, bool paused);
-    event Settled(uint256 indexed positionId, uint64 payout);
+    event Settled(uint256 indexed positionId, uint64 payout, uint64 effectiveAt);
+    event SettleCancelled(uint256 indexed positionId);
     event PosterSet(address indexed poster);
+    event PostExpired(uint256 indexed id);
     event PostParamsSet(uint32 maxPostAge, uint32 maxPosterSilence, uint64 postJumpAbs, uint32 postCooldown);
     event PricePosted(uint256 indexed positionId, uint64 price, bool halted);
 
@@ -173,9 +182,12 @@ contract PriceOracle is Ownable2Step, EIP712 {
 
     /// @notice Change the poster: the first set and a revoke (zero) are immediate, a change waits `ROLE_DELAY`.
     function setPoster(address poster_) external onlyOwner {
-        if (poster_ == address(0) || poster == address(0)) {
+        // Revoking is instant; only the very first poster skips the delay, so a
+        // revoke followed by a set cannot install a new poster at once.
+        if (poster_ == address(0) || !posterEverSet) {
             poster = poster_;
             pendingPoster = address(0);
+            if (poster_ != address(0)) posterEverSet = true;
             emit PosterSet(poster_);
             return;
         }
@@ -213,6 +225,22 @@ contract PriceOracle is Ownable2Step, EIP712 {
         posterAliveAt = uint64(block.timestamp);
     }
 
+    /**
+     * @notice Withdraw posted prices the poster can no longer stand behind (an
+     *         empty or one-sided book, a game in play): they read as stale until
+     *         the next post. The last price is kept for the jump check.
+     */
+    function expire(uint256[] calldata ids) external {
+        if (msg.sender != poster) revert OnlyPoster();
+        for (uint256 i; i < ids.length; ++i) {
+            Posted storage p = posted[ids[i]];
+            if (p.at > 1) {
+                p.at = 1;
+                emit PostExpired(ids[i]);
+            }
+        }
+    }
+
     /// @notice Post midpoints, 6 decimals, strictly inside (0, 1). Also counts as `alive`.
     function post(uint256[] calldata ids, uint64[] calldata prices) external {
         if (msg.sender != poster) revert OnlyPoster();
@@ -243,8 +271,10 @@ contract PriceOracle is Ownable2Step, EIP712 {
         if (block.timestamp > p.at + maxPostAge) revert PostStale(id, p.at);
         if (block.timestamp < p.haltedUntil) revert PostHalted(id, p.haltedUntil);
         Status memory s = statuses[id];
-        if (s.settled) revert MarketSettled(id);
-        if (side == BUY && s.paused) revert MarketPaused(id);
+        if (_settled(s)) revert MarketSettled(id);
+        // Unlike a signed quote, a posted price cannot follow a paused market (a
+        // game in play, a book cleared at kick-off), so it closes both ways.
+        if (s.paused) revert MarketPaused(id);
         return p.price;
     }
 
@@ -255,14 +285,38 @@ contract PriceOracle is Ownable2Step, EIP712 {
         }
     }
 
-    /// @notice Record the final payout per share, 0..1e6. One-way.
+    /**
+     * @notice Record the final payout per share, 0..1e6. It takes effect after
+     *         SETTLE_DELAY, and buying stops at once. One-way once in effect.
+     */
     function settle(uint256 id, uint64 payout) external onlyKeeper {
         if (payout > ONE) revert PriceOutOfRange(id, payout);
         Status storage s = statuses[id];
-        if (s.settled) revert AlreadySettled(id);
-        s.settled = true;
+        if (s.settleAt != 0) revert AlreadySettled(id);
+        uint64 at = uint64(block.timestamp + SETTLE_DELAY);
+        s.paused = true;
         s.payout = payout;
-        emit Settled(id, payout);
+        s.settleAt = at;
+        emit Settled(id, payout, at);
+    }
+
+    /// @notice Withdraw a settlement that has not taken effect yet (a wrong or forged payout).
+    function cancelSettle(uint256 id) external onlyOwner {
+        Status storage s = statuses[id];
+        if (s.settleAt == 0 || block.timestamp >= s.settleAt) revert NothingPending();
+        s.settleAt = 0;
+        s.payout = 0;
+        emit SettleCancelled(id);
+    }
+
+    /// @notice The recorded payout and when it takes effect (0 = none recorded).
+    function settlement(uint256 id) external view returns (uint64 payout, uint64 settleAt) {
+        Status memory s = statuses[id];
+        return (s.payout, s.settleAt);
+    }
+
+    function _settled(Status memory s) internal view returns (bool) {
+        return s.settleAt != 0 && block.timestamp >= s.settleAt;
     }
 
     /**
@@ -279,7 +333,7 @@ contract PriceOracle is Ownable2Step, EIP712 {
         if (ECDSA.recover(quoteDigest(q), sig) != signer) revert BadSignature();
 
         Status memory s = statuses[q.positionId];
-        if (s.settled) revert MarketSettled(q.positionId);
+        if (_settled(s)) revert MarketSettled(q.positionId);
         if (side == BUY && s.paused) revert MarketPaused(q.positionId);
         return q.price;
     }
@@ -292,6 +346,12 @@ contract PriceOracle is Ownable2Step, EIP712 {
 
     function status(uint256 id) external view returns (bool paused, bool settled, uint64 payout) {
         Status memory s = statuses[id];
-        return (s.paused, s.settled, s.payout);
+        bool done = _settled(s);
+        return (s.paused, done, done ? s.payout : 0);
+    }
+
+    /// @dev Disabled: a contract without an owner could never be resumed or reconfigured.
+    function renounceOwnership() public pure override {
+        revert BadParams();
     }
 }

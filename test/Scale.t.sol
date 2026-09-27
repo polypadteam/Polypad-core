@@ -176,6 +176,102 @@ contract ScaleTest is PolypadBase {
         assertEq(exchange.queued(), 0);
     }
 
+    function test_aFrozenSellerDoesNotBlockTheQueue() public {
+        (uint256 a,) = _buy(alice, curve, 1_000e6);
+        (uint256 b,) = _buy(bob, curve, 1_000e6);
+        uint256 all = usdg.balanceOf(address(exchange));
+        vm.prank(keeper);
+        exchange.sendToBridge(all);
+        uint256 owedA = _sell(alice, curve, a);
+        uint256 owedB = _sell(bob, curve, b);
+        usdg.freeze(alice);
+
+        uint256 bobBefore = usdg.balanceOf(bob);
+        usdg.mint(address(exchange), owedA + owedB);
+        exchange.payQueue(10);
+        // Bob, behind Alice, is paid; Alice's claim is set aside, still owed.
+        assertEq(usdg.balanceOf(bob) - bobBefore, owedB);
+        assertEq(exchange.queueLength(), 0);
+        assertEq(exchange.unclaimed(alice), owedA);
+        assertEq(exchange.queued(), owedA);
+        assertEq(exchange.freeFloat(), 0);
+
+        // Alice takes it to another address.
+        address fresh = makeAddr("fresh");
+        vm.prank(alice);
+        exchange.withdrawUnclaimed(fresh);
+        assertEq(usdg.balanceOf(fresh), owedA);
+        assertEq(exchange.queued(), 0);
+        vm.prank(alice);
+        vm.expectRevert(PExchange.ZeroAmount.selector);
+        exchange.withdrawUnclaimed(fresh);
+    }
+
+    /// A set-aside claim keeps its USDG: later claims in the queue are paid only
+    /// from the balance above `unclaimedTotal`, so the set-aside owner can always
+    /// withdraw, in order.
+    function test_setAsideClaimsKeepTheirUsdgFromLaterClaims() public {
+        (uint256 a,) = _buy(alice, curve, 1_000e6);
+        (uint256 b,) = _buy(bob, curve, 1_000e6);
+        uint256 all = usdg.balanceOf(address(exchange));
+        vm.prank(keeper);
+        exchange.sendToBridge(all);
+        uint256 owedA = _sell(alice, curve, a);
+        usdg.freeze(alice);
+        // Refill just enough for Alice's claim: it is set aside, its USDG reserved.
+        usdg.mint(address(exchange), owedA);
+        exchange.payQueue(10);
+        assertEq(exchange.unclaimed(alice), owedA);
+        assertEq(exchange.unclaimedTotal(), owedA);
+
+        // Bob sells now and is queued; the reserved USDG must not pay him.
+        uint256 owedB = _sell(bob, curve, b);
+        assertEq(exchange.queueLength(), 1);
+        exchange.payQueue(10);
+        assertEq(exchange.queueLength(), 1, "Bob is not paid out of Alice's reserve");
+        assertEq(usdg.balanceOf(address(exchange)), owedA);
+
+        // Alice (with a fresh address) can always take hers.
+        address fresh = makeAddr("fresh");
+        vm.prank(alice);
+        exchange.withdrawUnclaimed(fresh);
+        assertEq(usdg.balanceOf(fresh), owedA);
+        assertEq(exchange.unclaimedTotal(), 0);
+        // Bob is paid once the float covers him.
+        usdg.mint(address(exchange), owedB);
+        exchange.payQueue(10);
+        assertEq(exchange.queueLength(), 0);
+        assertEq(exchange.queued(), 0);
+    }
+
+    function test_nothingIsPaidOrMintedToTheZeroAddress() public {
+        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
+        vm.startPrank(alice);
+        usdg.approve(address(exchange), 10e6);
+        vm.expectRevert(PExchange.BadParams.selector);
+        exchange.mint(address(p), 10e6, 0, address(0), q, sig);
+        uint256 shares = exchange.mint(address(p), 10e6, 0, alice, q, sig);
+        (q, sig) = signedQuote(ID, SELL);
+        vm.expectRevert(PExchange.BadParams.selector);
+        exchange.redeem(address(p), shares, 0, address(0), q, sig);
+        vm.stopPrank();
+    }
+
+    function test_aBuyTooShortOfGasToGraduateReverts() public {
+        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
+        vm.startPrank(alice);
+        usdg.approve(address(exchange), 7_000e6);
+        uint256 pIn = exchange.mint(address(p), 7_000e6, 0, alice, q, sig);
+        p.approve(address(curve), pIn);
+        // Enough for the buy, not for the pool: refused, instead of a sold-out curve with no pool.
+        vm.expectRevert();
+        curve.buy{gas: 900_000}(pIn, 0, alice);
+        assertFalse(curve.graduated());
+        curve.buy(pIn, 0, alice);
+        vm.stopPrank();
+        assertTrue(curve.graduated());
+    }
+
     function test_aMintPaysTheQueue() public {
         (uint256 a,) = _buy(alice, curve, 500e6);
         vm.startPrank(keeper);
@@ -201,6 +297,7 @@ contract ScaleTest is PolypadBase {
 
         vm.prank(keeper);
         oracle.settle(ID, 1e6);
+        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
 
         // Buys keep working with no quote at $1 + spread, no backing needed.
         PriceOracle.Quote memory none;

@@ -5,6 +5,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {PToken} from "./PToken.sol";
@@ -106,10 +107,12 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     /// @notice Extra spread on posted-price trades, both sides.
     uint16 public postedSpreadBps = 150;
-    /// @notice Largest posted-price trade, USDG (6 decimals).
-    uint256 public postedMaxTrade = 500e6;
+    /// @notice Largest posted-price trade, USDG (6 decimals). 0 (the default)
+    ///         closes the posted path: a one-step trade at a posted price can be
+    ///         raced by anyone who sees Polymarket move before the next post.
+    uint256 public postedMaxTrade;
     /// @notice Most USDG traded on the posted path per market per block.
-    uint256 public postedMaxPerBlock = 2_000e6;
+    uint256 public postedMaxPerBlock;
     /// @notice Most USDG that may leave through redemptions per clock hour.
     uint256 public outflowCapPerHour = 25_000e6;
     /// @notice Every mint and redeem refused while set.
@@ -127,8 +130,16 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     /// @notice Redemptions waiting for float, oldest first from `claimHead`.
     Claim[] public claims;
     uint256 public claimHead;
-    /// @notice USDG owed to the queue.
+    /// @notice USDG owed to the queue, including claims that could not be delivered.
     uint256 public queued;
+    /// @notice Claims whose transfer failed (a frozen or rejecting address): the
+    ///         owner withdraws them with `withdrawUnclaimed`, so one bad recipient
+    ///         never blocks the queue behind it.
+    mapping(address => uint256) public unclaimed;
+    /// @notice Sum of `unclaimed`: reserved for those owners, never paid to the queue.
+    uint256 public unclaimedTotal;
+    /// @dev Set once a bridge deposit address has been in place; later ones wait BRIDGE_DELAY.
+    bool public bridgeEverSet;
 
     struct BlockUse {
         uint64 blockNumber;
@@ -155,6 +166,8 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     event HaltSet(bool halted);
     event Queued(uint256 indexed ticket, address indexed to, uint256 amount);
     event ClaimPaid(uint256 indexed ticket, address indexed to, uint256 amount);
+    event ClaimUndelivered(uint256 indexed ticket, address indexed to, uint256 amount);
+    event UnclaimedWithdrawn(address indexed from, address indexed to, uint256 amount);
     event SettleFeeSet(uint16 settleFeeBps);
     event MaxPriceSet(uint256 indexed positionId, uint64 maxPrice);
     event ShareLabelSet(uint256 indexed positionId, string name, string symbol);
@@ -316,6 +329,18 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         return _payQueue(max);
     }
 
+    /// @notice Withdraw a claim the queue could not deliver, to any address.
+    function withdrawUnclaimed(address to) external nonReentrant returns (uint256 amount) {
+        if (to == address(0)) revert BadParams();
+        amount = unclaimed[msg.sender];
+        if (amount == 0) revert ZeroAmount();
+        unclaimed[msg.sender] = 0;
+        unclaimedTotal -= amount;
+        queued -= amount;
+        usdg.safeTransfer(to, amount);
+        emit UnclaimedWithdrawn(msg.sender, to, amount);
+    }
+
     /// @notice Claims still waiting.
     function queueLength() external view returns (uint256) {
         return claims.length - claimHead;
@@ -351,7 +376,12 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
      */
     function setRoles(address keeper_, address factory_, address bridgeDeposit_) external onlyOwner {
         if (bridgeDeposit_ != bridgeDeposit) {
-            if (bridgeDeposit != address(0)) revert BridgeChangeDelayed();
+            // Clearing is instant; only the very first bridge skips BRIDGE_DELAY,
+            // so a clear followed by a set cannot install a new one at once.
+            if (bridgeDeposit_ != address(0)) {
+                if (bridgeEverSet) revert BridgeChangeDelayed();
+                bridgeEverSet = true;
+            }
             bridgeDeposit = bridgeDeposit_;
         }
         keeper = keeper_;
@@ -369,6 +399,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         if (pendingBridgeDepositAt == 0) revert NothingPending();
         if (block.timestamp < pendingBridgeDepositAt) revert NotYet(pendingBridgeDepositAt);
         bridgeDeposit = pendingBridgeDeposit;
+        if (bridgeDeposit != address(0)) bridgeEverSet = true;
         pendingBridgeDeposit = address(0);
         pendingBridgeDepositAt = 0;
         emit RolesSet(keeper, factory, bridgeDeposit);
@@ -506,6 +537,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         returns (uint256 out)
     {
         if (halted) revert Halted();
+        if (to == address(0)) revert BadParams();
         if (price < minPrice || price > maxPriceOf(id)) revert PriceOutOfBand(price);
 
         out = _mintOut(price, usdgIn, spreadBps);
@@ -533,6 +565,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         returns (uint256 out)
     {
         if (halted) revert Halted();
+        if (to == address(0)) revert BadParams();
         if (payout == 0) revert SettledAtZero(id);
         out = _mintOut(payout, usdgIn, buySpreadBps);
         if (out == 0) revert ZeroAmount();
@@ -548,6 +581,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         returns (uint256 out)
     {
         if (halted) revert Halted();
+        if (to == address(0)) revert BadParams();
         out = _redeemOut(price, amountIn, spreadBps);
         if (out < minOut) revert Slippage(out, minOut);
         uint256 remaining = outflowRemaining();
@@ -564,7 +598,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         if (now_ > 0) usdg.safeTransfer(to, now_);
         if (out > now_) {
             uint256 rest = out - now_;
-            claims.push(Claim(to, uint96(rest)));
+            claims.push(Claim(to, SafeCast.toUint96(rest)));
             queued += rest;
             emit Queued(claims.length - 1, to, rest);
         }
@@ -574,18 +608,36 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         uint256 head = claimHead;
         uint256 end = claims.length;
         uint256 bal = usdg.balanceOf(address(this));
+        // Set-aside claims keep their USDG; the queue is paid from the rest.
+        bal = bal > unclaimedTotal ? bal - unclaimedTotal : 0;
         while (head < end && paid < max) {
             Claim memory c = claims[head];
             if (c.amount > bal) break;
+            bool sent = _tryTransfer(c.to, c.amount);
+            // Every transfer failing (USDG paused) is not this recipient's fault:
+            // stop, and keep the queue in order for when it resumes.
+            if (!sent && !_tryTransfer(address(this), 0)) break;
             delete claims[head];
-            bal -= c.amount;
-            queued -= c.amount;
-            usdg.safeTransfer(c.to, c.amount);
-            emit ClaimPaid(head, c.to, c.amount);
+            if (sent) {
+                bal -= c.amount;
+                queued -= c.amount;
+                emit ClaimPaid(head, c.to, c.amount);
+            } else {
+                // Still owed and still counted in `queued`, but no longer in line.
+                unclaimed[c.to] += c.amount;
+                unclaimedTotal += c.amount;
+                emit ClaimUndelivered(head, c.to, c.amount);
+            }
             ++head;
             ++paid;
         }
         claimHead = head;
+    }
+
+    /// @dev A USDG transfer that reports failure instead of reverting.
+    function _tryTransfer(address to, uint256 amount) internal returns (bool) {
+        (bool ok, bytes memory ret) = address(usdg).call(abi.encodeCall(IERC20.transfer, (to, amount)));
+        return ok && (ret.length == 0 ? address(usdg).code.length > 0 : abi.decode(ret, (bool)));
     }
 
     /// @notice Count `usdg` against the posted path's per-trade and per-block caps.
@@ -624,5 +676,10 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     function _mulDivUp(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {
         return (a * b + d - 1) / d;
+    }
+
+    /// @dev Disabled: a contract without an owner could never be resumed or reconfigured.
+    function renounceOwnership() public pure override {
+        revert BadParams();
     }
 }

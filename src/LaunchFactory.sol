@@ -73,6 +73,7 @@ contract LaunchFactory is Ownable2Step {
     error QuoteForOtherMarket(uint256 quoted, uint256 positionId);
     error PriceOutOfBand(uint256 price);
     error NoGraduator();
+    error BadParams();
     error BadHoldersShare(uint16 holdersBps);
     error BadFees();
 
@@ -83,6 +84,9 @@ contract LaunchFactory is Ownable2Step {
     }
 
     function setConfig(address platform_, uint256 gradUsd_) external onlyOwner {
+        // A zero platform would make every fee transfer revert; a graduation size
+        // out of range makes a curve that cannot trade or never fills.
+        if (platform_ == address(0) || gradUsd_ < 1_000e6 || gradUsd_ > 1_000_000e6) revert BadParams();
         platform = platform_;
         gradUsd = gradUsd_;
         emit ConfigSet(platform_, gradUsd_);
@@ -177,5 +181,10 @@ contract LaunchFactory is Ownable2Step {
 
     function curveCount() external view returns (uint256) {
         return curves.length;
+    }
+
+    /// @dev Disabled: a contract without an owner could never be resumed or reconfigured.
+    function renounceOwnership() public pure override {
+        revert BadParams();
     }
 }

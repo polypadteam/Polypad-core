@@ -95,6 +95,19 @@
   },
   {
     "type": "function",
+    "name": "GRADUATION_GAS",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "buy",
     "inputs": [
       {
@@ -613,6 +626,17 @@
     "type": "error",
     "name": "Graduated_",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NeedsGasToGraduate",
+    "inputs": [
+      {
+        "name": "gas",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

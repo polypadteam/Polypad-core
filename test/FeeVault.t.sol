@@ -202,7 +202,7 @@ contract FeeVaultTest is PolypadBase {
         assertEq(supply, c.balanceOf(alice) + c.balanceOf(platform));
     }
 
-    function test_keeperPaysHoldersInUsdg() public {
+    function test_aHolderCashesOutTheirOwnRewardsOthersGetShares() public {
         (Coin c, BondingCurve curve) = _launch(ID, 10_000);
         _buy(alice, curve, 2_000e6);
         _buy(bob, curve, 1_000e6);
@@ -217,12 +217,26 @@ contract FeeVaultTest is PolypadBase {
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, SELL);
         uint256 ua = usdg.balanceOf(alice);
         uint256 ub = usdg.balanceOf(bob);
+        // The keeper asks for USDG, but may not force a sale on anyone: shares it is.
         vm.prank(keeper);
         uint256 paid = vault.claimFor(address(c), hs, 0, true, q, sig);
         assertEq(paid, pa + pb);
-        assertApproxEqRel(usdg.balanceOf(alice) - ua, (pa * 600_000 / 1e6) * 9975 / 10_000, 0.001e18);
-        assertGt(usdg.balanceOf(bob) - ub, 0);
-        assertEq(vault.pending(address(c), alice), 0);
+        assertEq(usdg.balanceOf(alice), ua);
+        assertEq(_pOf(c).balanceOf(alice), pa);
+        assertEq(_pOf(c).balanceOf(bob), pb);
+
+        // A holder paying themselves may cash out.
+        vm.warp(block.timestamp + 1 hours);
+        _buy(carol, curve, 500e6);
+        vm.warp(block.timestamp + 1 hours);
+        uint256 pa2 = vault.pending(address(c), alice);
+        address[] memory me = new address[](1);
+        me[0] = alice;
+        (q, sig) = signedQuote(ID, SELL);
+        vm.prank(alice);
+        assertEq(vault.claimFor(address(c), me, 0, true, q, sig), pa2);
+        assertApproxEqRel(usdg.balanceOf(alice) - ua, (pa2 * 600_000 / 1e6) * 9975 / 10_000, 0.001e18);
+        assertEq(usdg.balanceOf(bob), ub);
         _assertSolvent(c, hs);
     }
 
@@ -236,12 +250,14 @@ contract FeeVaultTest is PolypadBase {
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, SELL);
 
         // Below the minimum: untouched.
+        vm.prank(alice);
         assertEq(vault.claimFor(address(c), hs, pa + 1, true, q, sig), 0);
         assertEq(vault.pending(address(c), alice), pa);
 
         // The exchange refuses (halted): skipped, rewards kept.
         vm.prank(keeper);
         exchange.halt();
+        vm.prank(alice);
         assertEq(vault.claimFor(address(c), hs, 0, true, q, sig), 0);
         assertEq(vault.pending(address(c), alice), pa);
 

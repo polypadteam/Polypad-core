@@ -353,7 +353,7 @@
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -631,6 +631,11 @@
         "internalType": "uint16"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "BadParams",
+    "inputs": []
   },
   {
     "type": "error",

@@ -27,12 +27,12 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x6bD4DfcFbEB52F36330214F280DA981be08A347c` | Creates coins; emits `Launched` |
-| Router | `0xE2cD9e78a1bC6BFe040AfF72D138713549A59454` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x574b75E7Ad4CceF103573a1fFD10C25AB2423AF8` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0x5BB537e4D5CDae0E0A9Ee248Cb538c984e051780` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0xd1C0DB193a7a84768E152a61b3297fF4D153e000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
-| FeeVault | `0x34777A4C2FA26EC648761f1FfEA99867959929E5` | Creator fees and holder dividends |
+| LaunchFactory | `0x18050d4BeaCF9B98a877A1346bf813C72FdBbf1c` | Creates coins; emits `Launched` |
+| Router | `0xA7186C32d591707B00ADBb26041c3B0538e2F038` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0x85CDF3C91BCE0a3b8a02C921dD74108F25eca496` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0x5E18De7CC60d4Bf5906AAFa1F41Cab48db0bc4cb` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0x88E83bB83112a95318a3F3E45B9888160c862000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| FeeVault | `0xbd8Fe714377fB0eb964fc767Aa77F2eb798A1869` | Creator fees and holder dividends |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
@@ -160,6 +160,11 @@ event Graduated(address indexed coin, address indexed pToken, bytes32 indexed po
 - The Router's `buy` / `sell` / `buyPosted` / `sellPosted` work unchanged: they
   route to the pool once the coin has graduated. `Router.quotePool(curve,
   pTokenIn, amount)` (call it with `eth_call`) quotes a pool trade.
+- `GET /v1/coins/<address>` adds `pool` once graduated: the pool key and id,
+  `sqrtPriceX96`, total `liquidity`, the full-range reserves it implies
+  (`reserveCoins`, `reserveShares`), `liquidityUsd` and `priceUsd` at the live
+  share price. Read on chain from the PoolManager (`extsload`), see
+  `lib/polypad/pool.ts`.
 
 ## Fees
 
@@ -210,7 +215,13 @@ charged on Robinhood Chain.
 
 Two ways; pick either.
 
-### 1. Plain contract calls (no API)
+### 1. Plain contract calls (no API): closed at launch
+
+> **Closed in v7.** `postedMaxTrade` is 0, so these calls revert. Testing showed
+> a one-step trade at a posted price can be raced: anyone who sees the
+> Polymarket book move before the next post can buy at the old price and sell at
+> the new one, at the float's expense. It reopens once posted trades fill in two
+> steps (request, then fill at the first post after it). Use the swap API (2).
 
 ```solidity
 // Buy: approve USDG to the Router first.
@@ -228,6 +239,8 @@ The posted path pauses itself for a few seconds after a big odds move and
 whenever the price poster is not running; trades then revert and can be retried.
 
 ### 2. Our swap API (best price, any size)
+
+Every route is described in [openapi.yaml](openapi.yaml) (OpenAPI 3.1, also served at `GET /v1/openapi.yaml`).
 
 A buy or sell at a fresh signed price from the live Polymarket book, built by
 our API the way Jupiter or 0x quotes work:

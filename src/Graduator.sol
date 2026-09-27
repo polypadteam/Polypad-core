@@ -102,6 +102,9 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
         if (!IsCurve(factory).isCurve(msg.sender)) revert OnlyCurve();
         if (pools[address(coin)].liquidity != 0) revert AlreadyGraduated(address(coin));
 
+        // Measure against what was here before, so a donation (or another coin's
+        // pending fees in the same pToken) can neither be swept nor break the math.
+        uint256[2] memory before = [coin.balanceOf(address(this)), pToken.balanceOf(address(this))];
         coin.safeTransferFrom(msg.sender, address(this), coins);
         pToken.safeTransferFrom(msg.sender, address(this), pTokens);
 
@@ -110,13 +113,21 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
         pools[address(coin)] = Pool(key, feeVault, platform, liquidity, creatorShareBps);
 
         // Rounding leaves a few units behind; they are not worth a second position.
-        uint256 coinDust = coin.balanceOf(address(this));
-        uint256 pDust = pToken.balanceOf(address(this));
-        if (coinDust > 0) coin.safeTransfer(platform, coinDust);
-        if (pDust > 0) pToken.safeTransfer(platform, pDust);
+        uint256[2] memory dust = _sweepDust(coin, pToken, platform, before);
 
         poolId = PoolId.unwrap(key.toId());
-        emit Graduated(address(coin), address(pToken), poolId, coins - coinDust, pTokens - pDust, liquidity);
+        emit Graduated(address(coin), address(pToken), poolId, coins - dust[0], pTokens - dust[1], liquidity);
+    }
+
+    /// @dev Pay the platform what this graduation left behind, and only that.
+    function _sweepDust(IERC20 coin, IERC20 pToken, address platform, uint256[2] memory before)
+        internal
+        returns (uint256[2] memory dust)
+    {
+        dust[0] = coin.balanceOf(address(this)) - before[0];
+        dust[1] = pToken.balanceOf(address(this)) - before[1];
+        if (dust[0] > 0) coin.safeTransfer(platform, dust[0]);
+        if (dust[1] > 0) pToken.safeTransfer(platform, dust[1]);
     }
 
     /* ------------------------------------------------------------ fees */

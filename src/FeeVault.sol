@@ -54,9 +54,9 @@ contract FeeVault is ReentrancyGuard {
     uint256 public constant ACC = 1e36;
     /// @dev balance x acc must never overflow: balance <= 1e27 (the coin's supply).
     uint256 public constant MAX_ACC = type(uint256).max / 1_000_000_000e18;
-    /// @notice Below one whole coin held by wallets, nothing streams (it waits),
-    ///         so a dust holder cannot collect the whole stream.
-    uint256 public constant MIN_SUPPLY = 1e18;
+    /// @notice Below 0.01% of supply held by wallets, nothing streams (it waits),
+    ///         so the last dust holder of a dead coin cannot collect the stream.
+    uint256 public constant MIN_SUPPLY = 100_000e18;
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     address public immutable factory;
@@ -159,8 +159,13 @@ contract FeeVault is ReentrancyGuard {
             } else {
                 _release(coin);
                 Book storage b = books[coin];
-                b.streaming += toHolders;
-                b.end = uint64(block.timestamp + STREAM);
+                // The new amount streams over a full STREAM; what is still streaming
+                // keeps its own pace. The end is their amount-weighted average, so a
+                // stream of tiny deposits cannot hold back what is already there.
+                uint256 left = b.end > block.timestamp ? b.end - block.timestamp : 0;
+                uint256 total = b.streaming + toHolders;
+                b.end = uint64(block.timestamp + (b.streaming * left + toHolders * STREAM) / total);
+                b.streaming = total;
             }
         }
         emit Deposited(coin, asset, toPayee, toHolders);
@@ -222,7 +227,8 @@ contract FeeVault is ReentrancyGuard {
      * @notice Pay `holders` what they are owed on `coin`. Anyone may call; each
      *         holder is paid only their own rewards, to their own address.
      * @param minAmount skip holders owed less (not worth the gas)
-     * @param cashOut pay USDG through the exchange at quote `q` instead of pToken.
+     * @param cashOut pay USDG through the exchange at quote `q` instead of pToken;
+     *        honoured only for a holder claiming their own rewards.
      *        A redemption the exchange refuses (halted, outflow cap) leaves the
      *        holder's rewards untouched.
      */
@@ -255,6 +261,9 @@ contract FeeVault is ReentrancyGuard {
         uint256 amount = Math.min(rewards[coin][h], books[coin].pot);
         if (amount == 0 || amount < minAmount) return 0;
         _debit(coin, h);
+        // Only a holder may turn their own rewards into USDG: nobody can force a
+        // sale (and its spread) on someone else.
+        cashOut = cashOut && h == msg.sender;
         if (cashOut ? _tryRedeem(p, amount, h, q, sig) : _tryTransfer(p, h, amount)) {
             emit HolderPaid(coin, h, amount, cashOut);
             return amount;

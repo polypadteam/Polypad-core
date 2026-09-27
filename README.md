@@ -35,7 +35,13 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 - **Posted prices.** Polypad posts each market's midpoint on chain when it
   moves, so any contract can trade with plain calls (`Router.buyPosted` /
   `sellPosted`) at a wider spread and capped size. Posted prices are usable only
-  while the poster is alive, and a big jump halts them briefly.
+  while the poster is alive, and a big jump halts them briefly. **Closed at
+  launch** (`postedMaxTrade = 0`): a one-step trade at a posted price can be
+  raced by anyone who sees Polymarket move first; it reopens with a two-step fill.
+- **Settlement.** The keeper records each market's payout from Polymarket's
+  on-chain result; it takes effect an hour later (`SETTLE_DELAY`), and the owner
+  can cancel a wrong one meanwhile, so one hot key cannot settle a market at $1
+  and redeem the float.
 
 ### Safety
 

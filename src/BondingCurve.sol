@@ -45,6 +45,8 @@ contract BondingCurve is ReentrancyGuard {
 
     uint256 public constant BPS = 10_000;
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
+    /// @notice Gas a graduating buy must still have: pool creation costs ~600k.
+    uint256 public constant GRADUATION_GAS = 1_200_000;
 
     IERC20 public immutable pToken;
     address public immutable exchange;
@@ -85,6 +87,7 @@ contract BondingCurve is ReentrancyGuard {
     error SoldOut_();
     error Slippage(uint256 got, uint256 minimum);
     error Graduated_();
+    error NeedsGasToGraduate(uint256 gas);
     error NotSoldOut();
 
     constructor(
@@ -138,7 +141,7 @@ contract BondingCurve is ReentrancyGuard {
         uint256 sellable = trackedTokens - reserved;
         if (sellable == 0) revert SoldOut_();
 
-        uint256 fee = (quoteIn * feeBps) / BPS;
+        uint256 fee = _feeOn(quoteIn);
         uint256 net = quoteIn - fee;
         uint256 v = phantom + trackedQuote;
         out = (net * trackedTokens) / (v + net);
@@ -184,7 +187,7 @@ contract BondingCurve is ReentrancyGuard {
         // Rounding keeps phantom + trackedQuote above the invariant, so this holds;
         // the clamp is defensive against a curve that was never bought.
         if (gross > trackedQuote) gross = trackedQuote;
-        uint256 fee = (gross * feeBps) / BPS;
+        uint256 fee = _feeOn(gross);
         out = gross - fee;
         if (out == 0) revert ZeroAmount();
         if (out < minOut) revert Slippage(out, minOut);
@@ -203,7 +206,7 @@ contract BondingCurve is ReentrancyGuard {
     /// @notice Coins out for `quoteIn` pToken on the curve; 0 once graduated (use the pool).
     function quoteBuy(uint256 quoteIn) external view returns (uint256 out) {
         if (graduated) return 0;
-        uint256 net = quoteIn - (quoteIn * feeBps) / BPS;
+        uint256 net = quoteIn - _feeOn(quoteIn);
         out = (net * trackedTokens) / (phantom + trackedQuote + net);
         uint256 sellable = trackedTokens - reserved;
         if (out > sellable) out = sellable;
@@ -214,7 +217,7 @@ contract BondingCurve is ReentrancyGuard {
         if (graduated) return 0;
         uint256 gross = (coinsIn * (phantom + trackedQuote)) / (trackedTokens + coinsIn);
         if (gross > trackedQuote) gross = trackedQuote;
-        out = gross - (gross * feeBps) / BPS;
+        out = gross - _feeOn(gross);
     }
 
     /// @notice Marginal price in pToken per whole coin, 6 decimals (pToken units per 1e18 coin).
@@ -241,6 +244,9 @@ contract BondingCurve is ReentrancyGuard {
      *      A failure leaves the curve sold out and retryable.
      */
     function _graduate() internal {
+        // Without this a buyer could send just enough gas for the buy and let the
+        // pool creation run out inside the try, leaving the curve stuck sold out.
+        if (gasleft() < GRADUATION_GAS) revert NeedsGasToGraduate(GRADUATION_GAS);
         uint256 q = trackedQuote;
         uint256 poolCoins = (reserved * q) / (phantom + q);
         coin.forceApprove(address(graduator), poolCoins);
@@ -261,6 +267,11 @@ contract BondingCurve is ReentrancyGuard {
             pToken.forceApprove(address(graduator), 0);
             emit GraduationFailed(reason);
         }
+    }
+
+    /// @dev The fee on `amount`, rounded up: no trade is too small to pay it.
+    function _feeOn(uint256 amount) internal view returns (uint256) {
+        return (amount * feeBps + BPS - 1) / BPS;
     }
 
     function _payFee(uint256 fee) internal {

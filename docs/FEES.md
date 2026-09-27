@@ -42,7 +42,7 @@ A $100 buy of a coin still on its curve:
 | When | Fee |
 | --- | --- |
 | Cashing out shares after the market has resolved | 0.5% (instead of the spread) |
-| Trading at the on-chain posted price (no signed quote, e.g. a plain contract call) | 1.5% spread instead of 0.25% |
+| Trading at the on-chain posted price (no signed quote, e.g. a plain contract call) | 1.5% spread instead of 0.25%; **not available at launch** |
 | Claiming creator fees or holder rewards | none (network gas only) |
 
 ## Creator fees
@@ -60,6 +60,10 @@ market shares (and, for pool sells, in the coin itself).
   hour, in the coin's market shares, once a holder is owed $1 or more; holders
   can also claim at any time. The holders' part of fees paid in the coin itself
   is burned, which every holder shares.
+- Rewards are paid in the market's shares, not dollars: they are worth what the
+  outcome is worth, $1 each if it happens and **$0 if it does not**. A holder
+  can cash their own rewards out to USDG when claiming; nobody else can sell
+  them on a holder's behalf.
 
 ## Fees are fixed per coin
 

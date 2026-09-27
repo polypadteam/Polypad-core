@@ -121,10 +121,10 @@ contract Deploy is Script {
         address keeper = vm.envAddress("KEEPER");
         o.exchange.setRoles(keeper, address(o.factory), vm.envOr("BRIDGE_DEPOSIT", address(0)));
         o.exchange.setOutflowCap(vm.envOr("OUTFLOW_CAP", uint256(1_000_000e6)));
+        // The posted path is off until it fills in two steps: a one-step trade at a
+        // posted price can be raced by anyone who sees Polymarket move before the post.
         o.exchange
-            .setPostedParams(
-                150, vm.envOr("POSTED_MAX_TRADE", uint256(5_000e6)), vm.envOr("POSTED_MAX_BLOCK", uint256(20_000e6))
-            );
+            .setPostedParams(150, vm.envOr("POSTED_MAX_TRADE", uint256(0)), vm.envOr("POSTED_MAX_BLOCK", uint256(0)));
         o.oracle.setPoster(keeper);
         uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
         if (gradUsd != 6_000e6) o.factory.setConfig(platform, gradUsd);
