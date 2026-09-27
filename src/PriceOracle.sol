@@ -62,6 +62,8 @@ contract PriceOracle is Ownable2Step, EIP712 {
 
     struct Status {
         bool paused;
+        /// @dev Whether it was paused before a settlement was recorded, to restore on cancel.
+        bool pausedBeforeSettle;
         uint64 payout;
         /// @dev When the payout takes effect; 0 = not settled. See `settle`.
         uint64 settleAt;
@@ -280,7 +282,11 @@ contract PriceOracle is Ownable2Step, EIP712 {
 
     function setPaused(uint256[] calldata ids, bool paused_) external onlyKeeper {
         for (uint256 i; i < ids.length; ++i) {
-            statuses[ids[i]].paused = paused_;
+            Status storage st = statuses[ids[i]];
+            // A market with a recorded payout is decided: buying never reopens.
+            // Only the owner's cancelSettle lifts that pause.
+            if (!paused_ && st.settleAt != 0) continue;
+            st.paused = paused_;
             emit PausedSet(ids[i], paused_);
         }
     }
@@ -294,9 +300,11 @@ contract PriceOracle is Ownable2Step, EIP712 {
         Status storage s = statuses[id];
         if (s.settleAt != 0) revert AlreadySettled(id);
         uint64 at = uint64(block.timestamp + SETTLE_DELAY);
+        s.pausedBeforeSettle = s.paused;
         s.paused = true;
         s.payout = payout;
         s.settleAt = at;
+        emit PausedSet(id, true);
         emit Settled(id, payout, at);
     }
 
@@ -306,6 +314,15 @@ contract PriceOracle is Ownable2Step, EIP712 {
         if (s.settleAt == 0 || block.timestamp >= s.settleAt) revert NothingPending();
         s.settleAt = 0;
         s.payout = 0;
+        // A wrong settlement leaves the market as it was before it: paused only if
+        // it already was (say, for its end date). If the keeper key recorded it,
+        // rotate the keeper first: it could record it again.
+        bool was = s.pausedBeforeSettle;
+        s.pausedBeforeSettle = false;
+        if (!was) {
+            s.paused = false;
+            emit PausedSet(id, false);
+        }
         emit SettleCancelled(id);
     }
 
@@ -325,17 +342,35 @@ contract PriceOracle is Ownable2Step, EIP712 {
      *         market unpaused; a SELL works on a paused market. Neither works on a
      *         settled market: redemptions there use `status` instead.
      */
-    function verify(Quote calldata q, bytes calldata sig, uint8 side) external view returns (uint64) {
+    function verify(Quote calldata q, bytes calldata sig, uint8 side) external view returns (uint64 price) {
+        (price,) = _verify(q, sig, side);
+    }
+
+    /// @notice `verify`, also returning the quote's EIP-712 digest (the exchange tracks fills by it).
+    function verifyWithDigest(Quote calldata q, bytes calldata sig, uint8 side)
+        external
+        view
+        returns (uint64 price, bytes32 digest)
+    {
+        return _verify(q, sig, side);
+    }
+
+    function _verify(Quote calldata q, bytes calldata sig, uint8 side)
+        internal
+        view
+        returns (uint64, bytes32 digest)
+    {
         if (q.side != side) revert WrongSide(q.side);
         if (block.timestamp > q.validUntil) revert QuoteExpired(q.validUntil);
         if (q.validUntil > block.timestamp + MAX_VALIDITY) revert QuoteTooLong(q.validUntil);
         if (q.price == 0 || q.price >= ONE) revert PriceOutOfRange(q.positionId, q.price);
-        if (ECDSA.recover(quoteDigest(q), sig) != signer) revert BadSignature();
+        digest = quoteDigest(q);
+        if (ECDSA.recover(digest, sig) != signer) revert BadSignature();
 
         Status memory s = statuses[q.positionId];
         if (_settled(s)) revert MarketSettled(q.positionId);
         if (side == BUY && s.paused) revert MarketPaused(q.positionId);
-        return q.price;
+        return (q.price, digest);
     }
 
     function quoteDigest(Quote calldata q) public view returns (bytes32) {

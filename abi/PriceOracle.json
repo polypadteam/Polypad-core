@@ -745,9 +745,70 @@
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "price",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "verifyWithDigest",
+    "inputs": [
+      {
+        "name": "q",
+        "type": "tuple",
+        "internalType": "struct PriceOracle.Quote",
+        "components": [
+          {
+            "name": "positionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "price",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "maxAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "validUntil",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      },
+      {
+        "name": "sig",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "side",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"

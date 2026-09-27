@@ -747,9 +747,70 @@ export const priceOracleAbi = [
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "price",
         "type": "uint64",
         "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "verifyWithDigest",
+    "inputs": [
+      {
+        "name": "q",
+        "type": "tuple",
+        "internalType": "struct PriceOracle.Quote",
+        "components": [
+          {
+            "name": "positionId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "side",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "price",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "maxAmount",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "validUntil",
+            "type": "uint64",
+            "internalType": "uint64"
+          }
+        ]
+      },
+      {
+        "name": "sig",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "side",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -1269,33 +1330,7 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "BPS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "BRIDGE_DELAY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "ONE",
     "inputs": [],
     "outputs": [
       {
@@ -2035,6 +2070,25 @@ export const pExchangeAbi = [
     "type": "function",
     "name": "queued",
     "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "quoteFilled",
+    "inputs": [
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
     "outputs": [
       {
         "name": "",

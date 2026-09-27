@@ -235,8 +235,10 @@ contract PostedTest is PolypadBase {
         router.sell(curve, coins / 20, 0, alice, q, sig);
         vm.stopPrank();
 
-        // Next hour: room again.
-        vm.warp((block.timestamp / 3_600 + 1) * 3_600);
+        // The cap is a sliding hour (the previous clock hour counts for its part
+        // still inside the last 3,600s): two hours on, the earlier sell is gone.
+        vm.warp(block.timestamp + 7_200);
+        _postOnChain(ID, 600_000);
         assertGt(_sell(alice, curve, coins / 20), 0);
     }
 

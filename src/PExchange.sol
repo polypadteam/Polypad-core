@@ -68,16 +68,21 @@ import {PriceOracle} from "./PriceOracle.sol";
  *
  * ## Circuit breaker
  *
- * USDG leaving through redemptions is capped per hour (`outflowCapPerHour`), so a
- * leaked signing key or a pricing bug cannot empty the float in one go. The
+ * USDG owed by redemptions is capped over a sliding hour (`outflowCapPerHour`):
+ * the previous clock hour counts for the part of it still inside the last hour.
+ * That allows one cap in a burst and at most about two in any 3,600 seconds,
+ * about one per hour sustained, so a leaked signing key or a pricing bug cannot
+ * empty the float in one go. It
+ * counts what redemptions create, paid now or queued: a queue that pays later
+ * never adds to it, and a run on a short float stops at the cap either way. The
  * keeper (or owner) can `halt` every mint and redeem at once; only the owner
  * lifts it.
  */
 contract PExchange is Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint256 public constant ONE = 1e6;
-    uint256 public constant BPS = 10_000;
+    uint256 internal constant ONE = 1e6;
+    uint256 internal constant BPS = 10_000;
 
     IERC20 public immutable usdg;
     PriceOracle public immutable oracle;
@@ -138,6 +143,8 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     mapping(address => uint256) public unclaimed;
     /// @notice Sum of `unclaimed`: reserved for those owners, never paid to the queue.
     uint256 public unclaimedTotal;
+    /// @notice How much of each signed quote (by EIP-712 digest) has been used.
+    mapping(bytes32 digest => uint256) public quoteFilled;
     /// @dev Set once a bridge deposit address has been in place; later ones wait BRIDGE_DELAY.
     bool public bridgeEverSet;
 
@@ -526,7 +533,13 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     /// @notice USDG that may still leave through redemptions this hour.
     function outflowRemaining() public view returns (uint256) {
-        uint256 used = outflowInHour[block.timestamp / 3_600];
+        // A sliding hour: the previous clock hour counts for the part of it still
+        // inside the last 3,600 seconds, so the cap cannot be taken twice across
+        // an hour boundary.
+        uint256 hour = block.timestamp / 3_600;
+        uint256 intoHour = block.timestamp % 3_600;
+        uint256 prev = hour == 0 ? 0 : outflowInHour[hour - 1];
+        uint256 used = outflowInHour[hour] + (prev * (3_600 - intoHour)) / 3_600;
         return used >= outflowCapPerHour ? 0 : outflowCapPerHour - used;
     }
 
@@ -618,8 +631,9 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
             // stop, and keep the queue in order for when it resumes.
             if (!sent && !_tryTransfer(address(this), 0)) break;
             delete claims[head];
+            // Either way the amount is spoken for: paid out, or reserved for its owner.
+            bal -= c.amount;
             if (sent) {
-                bal -= c.amount;
                 queued -= c.amount;
                 emit ClaimPaid(head, c.to, c.amount);
             } else {
@@ -666,12 +680,16 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     function _quoted(uint256 id, uint256 amount, PriceOracle.Quote calldata q, bytes calldata sig, uint8 side)
         internal
-        view
-        returns (uint64)
+        returns (uint64 price)
     {
         if (q.positionId != id) revert QuoteForOtherMarket(q.positionId, id);
-        if (amount > q.maxAmount) revert QuoteTooSmall(amount, q.maxAmount);
-        return oracle.verify(q, sig, side);
+        bytes32 digest;
+        (price, digest) = oracle.verifyWithDigest(q, sig, side);
+        // A quote covers `maxAmount` in total, however many transactions use it:
+        // replaying one (it binds no taker) cannot multiply its size.
+        uint256 used = quoteFilled[digest] + amount;
+        if (used > q.maxAmount) revert QuoteTooSmall(used, q.maxAmount);
+        quoteFilled[digest] = used;
     }
 
     function _mulDivUp(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {

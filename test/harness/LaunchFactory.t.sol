@@ -37,6 +37,17 @@ contract LaunchBot {
  * and the deployment script's wiring.
  */
 contract LaunchFactoryHarnessTest is PolypadBase {
+    /// @dev Forge tests do not enforce EIP-170, a real deployment does: v8's first
+    ///      deploy attempt stopped at a PExchange 72 bytes over the limit.
+    function test_everyContractFitsTheCodeSizeLimit() public view {
+        assertLe(address(oracle).code.length, 24_576, "PriceOracle");
+        assertLe(address(exchange).code.length, 24_576, "PExchange");
+        assertLe(address(factory).code.length, 24_576, "LaunchFactory");
+        assertLe(address(router).code.length, 24_576, "Router");
+        assertLe(address(graduator).code.length, 24_576, "Graduator");
+        assertLe(address(vault).code.length, 24_576, "FeeVault");
+    }
+
     bytes32 internal constant LAUNCHED = keccak256("Launched(uint256,address,address,address,address,uint256,uint256,uint16)");
 
     function _quote(uint256 id, uint8 side, uint64 price) internal view returns (PriceOracle.Quote memory q, bytes memory sig) {

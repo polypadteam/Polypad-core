@@ -157,12 +157,18 @@ contract ExchangeTimingTest is PolypadBase {
     }
 
     function test_quoteMaxAmountIsInclusive() public {
+        // One unit over, on a fresh quote: refused.
         (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, BUY, 600_000, 50e6, uint64(block.timestamp + 15));
-        vm.prank(alice);
-        exchange.mint(address(pA), 50e6, 0, alice, q, sig);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(PExchange.QuoteTooSmall.selector, 50e6 + 1, 50e6));
         exchange.mint(address(pA), 50e6 + 1, 0, alice, q, sig);
+        // Exactly maxAmount: fine, and it uses the quote up.
+        vm.prank(alice);
+        exchange.mint(address(pA), 50e6, 0, alice, q, sig);
+        assertEq(exchange.quoteFilled(oracle.quoteDigest(q)), 50e6);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.QuoteTooSmall.selector, 50e6 + 1, 50e6));
+        exchange.mint(address(pA), 1, 0, alice, q, sig);
     }
 
     function test_quoteFromAnyoneButTheSignerIsRefused() public {
@@ -301,24 +307,37 @@ contract ExchangeTimingTest is PolypadBase {
     /// Documented behaviour: a quote is a price, not a ticket. It may be used any
     /// number of times until it expires, each use bounded by `maxAmount`; the
     /// unbacked cap and the outflow cap bound the total.
-    function test_aQuoteReplaysWithinItsLifeEachUseBoundedByMaxAmount() public {
+    /// v8: a quote covers `maxAmount` in total across every use, by anyone.
+    function test_aQuoteCoversMaxAmountInTotalAcrossReplays() public {
         _back(ID, 0);
         (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, BUY, 600_000, 300e6, uint64(block.timestamp + 15));
-        uint256 total;
         vm.startPrank(alice);
-        for (uint256 i; i < 4; ++i) {
-            total += exchange.mint(address(pA), 300e6, 0, alice, q, sig);
-        }
-        // 1,200 USDG through a 300 USDG quote, all in one block...
-        assertGt(total, 1_900e6);
-        // ...until the unbacked cap (2,000 shares) stops it.
-        vm.expectRevert();
-        exchange.mint(address(pA), 300e6, 0, alice, q, sig);
+        exchange.mint(address(pA), 100e6, 0, alice, q, sig);
+        exchange.mint(address(pA), 200e6, 0, alice, q, sig);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.QuoteTooSmall.selector, 300e6 + 1, 300e6));
+        exchange.mint(address(pA), 1, 0, alice, q, sig);
         vm.stopPrank();
-        // Anyone may use anyone's quote: it binds no taker.
+        // It binds no taker, but a replay by someone else draws on the same total.
         vm.prank(bob);
-        vm.expectRevert(); // still the cap, not the signature
+        vm.expectRevert(abi.encodeWithSelector(PExchange.QuoteTooSmall.selector, 300e6 + 300e6, 300e6));
         exchange.mint(address(pA), 300e6, 0, bob, q, sig);
+        assertEq(exchange.quoteFilled(oracle.quoteDigest(q)), 300e6);
+    }
+
+    function test_quoteFillsAreTrackedPerQuote() public {
+        (PriceOracle.Quote memory q1, bytes memory s1) = _q(ID, BUY, 600_000, 100e6, uint64(block.timestamp + 15));
+        (PriceOracle.Quote memory q2, bytes memory s2) = _q(ID, BUY, 600_000, 100e6 + 1, uint64(block.timestamp + 15));
+        (PriceOracle.Quote memory q3, bytes memory s3) = _q(ID_B, BUY, 600_000, 100e6, uint64(block.timestamp + 15));
+        vm.startPrank(alice);
+        exchange.mint(address(pA), 100e6, 0, alice, q1, s1);
+        // A different maxAmount (the pricer adds a few wei) is a different quote.
+        exchange.mint(address(pA), 100e6, 0, alice, q2, s2);
+        exchange.mint(address(pB), 100e6, 0, alice, q3, s3);
+        vm.stopPrank();
+        assertEq(exchange.quoteFilled(oracle.quoteDigest(q1)), 100e6);
+        assertEq(exchange.quoteFilled(oracle.quoteDigest(q2)), 100e6);
+        assertEq(exchange.quoteFilled(oracle.quoteDigest(q3)), 100e6);
+        assertTrue(oracle.quoteDigest(q1) != oracle.quoteDigest(q2));
     }
 
     /* =============================================== 2. posted path */
@@ -700,10 +719,49 @@ contract ExchangeTimingTest is PolypadBase {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(PExchange.OutflowCap.selector, exchange.redeemOut(600_000, 1e6), 0));
         exchange.redeem(address(pA), 1e6, 0, alice, q, sig);
-        // One second later is a new clock hour.
+        // v8: a sliding hour. One second later is a new clock hour, but the last
+        // one still counts in full: no fresh cap at the boundary.
         vm.warp(block.timestamp + 1);
+        assertEq(exchange.outflowRemaining(), 0);
+        (q, sig) = _qNow(ID, SELL);
+        vm.prank(alice);
+        vm.expectRevert();
+        exchange.redeem(address(pA), amount, 0, alice, q, sig);
+        // It frees linearly: half the cap half an hour on, all of it an hour on.
+        vm.warp(block.timestamp + 1_800);
+        assertApproxEqAbs(exchange.outflowRemaining(), out, 1);
+        vm.warp(block.timestamp + 1_800);
         assertEq(exchange.outflowRemaining(), out * 2);
+        _alive();
         _redeem(alice, ID, amount);
+    }
+
+    function test_slidingOutflowWindowMath() public {
+        uint256 shares = _mint(alice, ID, 10_000e6);
+        vm.prank(owner);
+        exchange.setOutflowCap(1_000e6);
+        // Start of an hour, then use 600 of the cap at minute 10.
+        vm.warp((block.timestamp / 3_600 + 1) * 3_600 + 600);
+        _alive();
+        uint256 used;
+        while (used < 600e6) used += _redeem(alice, ID, 10e6);
+        uint256 cap = 1_000e6;
+        assertEq(exchange.outflowRemaining(), cap - used);
+        // Same hour: nothing frees.
+        vm.warp(block.timestamp + 2_000);
+        assertEq(exchange.outflowRemaining(), cap - used);
+        // Into the next hour by t seconds: the old hour counts (3600 - t) / 3600.
+        uint256 hourStart = (block.timestamp / 3_600 + 1) * 3_600;
+        uint256[4] memory ts = [uint256(0), 900, 2_700, 3_599];
+        for (uint256 i; i < ts.length; ++i) {
+            vm.warp(hourStart + ts[i]);
+            uint256 expectUsed = (used * (3_600 - ts[i])) / 3_600;
+            assertEq(exchange.outflowRemaining(), cap - expectUsed);
+        }
+        // Two hours on, the old hour is gone.
+        vm.warp(hourStart + 3_600);
+        assertEq(exchange.outflowRemaining(), cap);
+        shares;
     }
 
     function test_outflowCapCountsSignedPostedSettledAndQueuedAlike() public {
@@ -722,6 +780,8 @@ contract ExchangeTimingTest is PolypadBase {
         // A settlement takes SETTLE_DELAY, which rolls into a later clock hour:
         // the settled redemption is the only outflow of that hour.
         _settle(ID_B, 1e6);
+        // v8: the sliding hour still sees part of the earlier one; an hour more clears it.
+        vm.warp(block.timestamp + 3_600);
         assertEq(exchange.outflowRemaining(), 1_000_000e6);
         vm.prank(alice);
         uint256 d = exchange.redeemPosted(address(pB), sharesB, 0, alice);
@@ -919,7 +979,7 @@ contract ExchangeTimingTest is PolypadBase {
      * `freeFloat` still reserves it and it is paid on the next refill — but the
      * earlier claimant waits behind people who sold after them.
      */
-    function test_setAsideClaimCanWaitBehindLaterSellersUntilRefill() public {
+    function test_setAsideClaimKeepsItsUsdgFromLaterSellers() public {
         uint256 a = _mint(alice, ID, 500e6);
         uint256 b = _mint(bob, ID, 500e6);
         _drainFloat();
@@ -930,18 +990,18 @@ contract ExchangeTimingTest is PolypadBase {
         usdg.mint(address(exchange), oa);
         exchange.payQueue(10);
         assertEq(exchange.unclaimed(alice), oa);
-        if (ob <= oa) {
-            // Bob was paid from the USDG set aside for Alice.
-            assertEq(exchange.queueLength(), 0);
-            assertLt(usdg.balanceOf(address(exchange)), exchange.queued());
-            vm.prank(alice);
-            vm.expectRevert();
-            exchange.withdrawUnclaimed(makeAddr("fresh"));
-            usdg.mint(address(exchange), ob);
-        }
+        // v8: Alice's set-aside USDG stays hers. Bob waits for a refill.
+        assertEq(exchange.queueLength(), 1);
+        assertEq(usdg.balanceOf(address(exchange)), exchange.unclaimedTotal());
         vm.prank(alice);
         exchange.withdrawUnclaimed(makeAddr("fresh"));
-        assertEq(exchange.freeFloat(), usdg.balanceOf(address(exchange)) - exchange.queued());
+        assertEq(usdg.balanceOf(makeAddr("fresh")), oa);
+        uint256 bobBefore = usdg.balanceOf(bob);
+        usdg.mint(address(exchange), ob);
+        exchange.payQueue(10);
+        assertEq(usdg.balanceOf(bob) - bobBefore, ob);
+        assertEq(exchange.queued(), 0);
+        assertEq(exchange.freeFloat(), usdg.balanceOf(address(exchange)));
     }
 
     function test_bridgeCanNeverTouchQueuedOrUnclaimed() public {
