@@ -30,32 +30,6 @@
   },
   {
     "type": "function",
-    "name": "CREATOR_SHARE_BPS",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "FEE",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint24",
-        "internalType": "uint24"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "TICK_SPACING",
     "inputs": [],
     "outputs": [
@@ -193,6 +167,16 @@
         "name": "platform",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "fee",
+        "type": "uint24",
+        "internalType": "uint24"
+      },
+      {
+        "name": "creatorShareBps",
+        "type": "uint16",
+        "internalType": "uint16"
       }
     ],
     "outputs": [

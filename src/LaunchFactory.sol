@@ -8,6 +8,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {BondingCurve} from "./BondingCurve.sol";
 import {Coin} from "./Coin.sol";
 import {FeeVault} from "./FeeVault.sol";
+import {Fees} from "./Fees.sol";
 import {Graduator} from "./Graduator.sol";
 import {PExchange} from "./PExchange.sol";
 import {PriceOracle} from "./PriceOracle.sol";
@@ -35,6 +36,19 @@ contract LaunchFactory is Ownable2Step {
 
     /// @notice Where new curves graduate. Existing curves keep the one they were made with.
     Graduator public graduator;
+    /// @notice Most a curve may charge per trade: 2%.
+    uint16 public constant MAX_CURVE_FEE_BPS = 200;
+    /// @notice Most a graduated pool may charge: 1.5% (v4 fee units).
+    uint24 public constant MAX_POOL_FEE = 15_000;
+    /// @notice The creator side's share of any fee stays between 30% and 80%.
+    uint16 public constant MIN_CREATOR_SHARE_BPS = 3_000;
+    uint16 public constant MAX_CREATOR_SHARE_BPS = 8_000;
+
+    /// @notice Fees for new launches: 1.4% on the curve and 1% in the pool, each
+    ///         split half to the creator side and half to the platform. Each coin
+    ///         keeps the fees it launched with.
+    Fees public fees = Fees(140, 5_000, 10_000, 5_000);
+
     /// @notice Where creator fees go. Existing curves keep the one they were made with.
     FeeVault public feeVault;
 
@@ -54,11 +68,13 @@ contract LaunchFactory is Ownable2Step {
     event ConfigSet(address platform, uint256 gradUsd);
     event GraduatorSet(address graduator);
     event FeeVaultSet(address feeVault);
+    event FeesSet(uint16 curveFeeBps, uint16 curveCreatorShareBps, uint24 poolFee, uint16 poolCreatorShareBps);
 
     error QuoteForOtherMarket(uint256 quoted, uint256 positionId);
     error PriceOutOfBand(uint256 price);
     error NoGraduator();
     error BadHoldersShare(uint16 holdersBps);
+    error BadFees();
 
     constructor(address owner_, PExchange exchange_, PriceOracle oracle_, address platform_) Ownable(owner_) {
         exchange = exchange_;
@@ -75,6 +91,17 @@ contract LaunchFactory is Ownable2Step {
     function setGraduator(Graduator graduator_) external onlyOwner {
         graduator = graduator_;
         emit GraduatorSet(address(graduator_));
+    }
+
+    /// @notice Fees for coins launched from now on, within the caps above.
+    function setFees(Fees calldata f) external onlyOwner {
+        if (
+            f.curveFeeBps == 0 || f.curveFeeBps > MAX_CURVE_FEE_BPS || f.poolFee == 0 || f.poolFee > MAX_POOL_FEE
+                || f.curveCreatorShareBps < MIN_CREATOR_SHARE_BPS || f.curveCreatorShareBps > MAX_CREATOR_SHARE_BPS
+                || f.poolCreatorShareBps < MIN_CREATOR_SHARE_BPS || f.poolCreatorShareBps > MAX_CREATOR_SHARE_BPS
+        ) revert BadFees();
+        fees = f;
+        emit FeesSet(f.curveFeeBps, f.curveCreatorShareBps, f.poolFee, f.poolCreatorShareBps);
     }
 
     function setFeeVault(FeeVault feeVault_) external onlyOwner {
@@ -131,7 +158,8 @@ contract LaunchFactory is Ownable2Step {
             platform,
             (gradUsd * 2e6) / (price * 5),
             graduator,
-            feeVault
+            feeVault,
+            fees
         );
         coin = new Coin(name, symbol, metadataURI, address(curve), holdersBps > 0 ? address(feeVault) : address(0));
         feeVault.register(address(coin), address(curve), address(graduator), address(p), msg.sender, holdersBps);

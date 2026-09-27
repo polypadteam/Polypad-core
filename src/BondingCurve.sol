@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {FeeVault} from "./FeeVault.sol";
+import {Fees} from "./Fees.sol";
 import {Graduator} from "./Graduator.sol";
 
 /**
@@ -33,16 +34,16 @@ import {Graduator} from "./Graduator.sol";
  * burned, and the curve closes. If graduation fails for any reason the buy still
  * succeeds, the curve stays sold out, and anyone can retry with `graduate()`.
  *
- * Fees are 1% of the pToken side of every trade: 70% to the creator (paid into
- * the FeeVault, which credits the creator and, if they chose, the holders), 30%
- * to the platform. The pool charges the same 1% and splits it the same way.
+ * Fees are `feeBps` of the pToken side of every trade, split `creatorShareBps`
+ * to the creator side (paid into the FeeVault, which credits the creator and,
+ * if they chose, the holders) and the rest to the platform. The pool the coin
+ * graduates into charges `poolFee`, split `poolCreatorShareBps` the same way.
+ * All four are fixed when the coin launches (see `Fees`).
  */
 contract BondingCurve is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     uint256 public constant BPS = 10_000;
-    uint256 public constant FEE_BPS = 100;
-    uint256 public constant CREATOR_SHARE_BPS = 7_000;
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
     IERC20 public immutable pToken;
@@ -52,6 +53,10 @@ contract BondingCurve is ReentrancyGuard {
     address public immutable factory;
     Graduator public immutable graduator;
     FeeVault public immutable feeVault;
+    uint256 public immutable feeBps;
+    uint256 public immutable creatorShareBps;
+    uint24 public immutable poolFee;
+    uint16 public immutable poolCreatorShareBps;
     /// @notice Virtual pToken reserve, 6 decimals. Never held.
     uint256 public immutable phantom;
 
@@ -89,9 +94,14 @@ contract BondingCurve is ReentrancyGuard {
         address platform_,
         uint256 phantom_,
         Graduator graduator_,
-        FeeVault feeVault_
+        FeeVault feeVault_,
+        Fees memory fees_
     ) {
         feeVault = feeVault_;
+        feeBps = fees_.curveFeeBps;
+        creatorShareBps = fees_.curveCreatorShareBps;
+        poolFee = fees_.poolFee;
+        poolCreatorShareBps = fees_.poolCreatorShareBps;
         pToken = pToken_;
         graduator = graduator_;
         exchange = exchange_;
@@ -128,7 +138,7 @@ contract BondingCurve is ReentrancyGuard {
         uint256 sellable = trackedTokens - reserved;
         if (sellable == 0) revert SoldOut_();
 
-        uint256 fee = (quoteIn * FEE_BPS) / BPS;
+        uint256 fee = (quoteIn * feeBps) / BPS;
         uint256 net = quoteIn - fee;
         uint256 v = phantom + trackedQuote;
         out = (net * trackedTokens) / (v + net);
@@ -138,7 +148,7 @@ contract BondingCurve is ReentrancyGuard {
             // Net pToken that buys exactly `out`, rounded up, and its fee.
             net = (v * out + (trackedTokens - out) - 1) / (trackedTokens - out);
             if (net > quoteIn) net = quoteIn;
-            fee = (net * FEE_BPS + (BPS - FEE_BPS) - 1) / (BPS - FEE_BPS);
+            fee = (net * feeBps + (BPS - feeBps) - 1) / (BPS - feeBps);
             if (net + fee > quoteIn) fee = quoteIn - net;
             refund = quoteIn - net - fee;
             emit SoldOut();
@@ -174,7 +184,7 @@ contract BondingCurve is ReentrancyGuard {
         // Rounding keeps phantom + trackedQuote above the invariant, so this holds;
         // the clamp is defensive against a curve that was never bought.
         if (gross > trackedQuote) gross = trackedQuote;
-        uint256 fee = (gross * FEE_BPS) / BPS;
+        uint256 fee = (gross * feeBps) / BPS;
         out = gross - fee;
         if (out == 0) revert ZeroAmount();
         if (out < minOut) revert Slippage(out, minOut);
@@ -193,7 +203,7 @@ contract BondingCurve is ReentrancyGuard {
     /// @notice Coins out for `quoteIn` pToken on the curve; 0 once graduated (use the pool).
     function quoteBuy(uint256 quoteIn) external view returns (uint256 out) {
         if (graduated) return 0;
-        uint256 net = quoteIn - (quoteIn * FEE_BPS) / BPS;
+        uint256 net = quoteIn - (quoteIn * feeBps) / BPS;
         out = (net * trackedTokens) / (phantom + trackedQuote + net);
         uint256 sellable = trackedTokens - reserved;
         if (out > sellable) out = sellable;
@@ -204,7 +214,7 @@ contract BondingCurve is ReentrancyGuard {
         if (graduated) return 0;
         uint256 gross = (coinsIn * (phantom + trackedQuote)) / (trackedTokens + coinsIn);
         if (gross > trackedQuote) gross = trackedQuote;
-        out = gross - (gross * FEE_BPS) / BPS;
+        out = gross - (gross * feeBps) / BPS;
     }
 
     /// @notice Marginal price in pToken per whole coin, 6 decimals (pToken units per 1e18 coin).
@@ -235,7 +245,11 @@ contract BondingCurve is ReentrancyGuard {
         uint256 poolCoins = (reserved * q) / (phantom + q);
         coin.forceApprove(address(graduator), poolCoins);
         pToken.forceApprove(address(graduator), q);
-        try graduator.graduate(coin, pToken, poolCoins, q, address(feeVault), platform) returns (bytes32 poolId) {
+        try graduator.graduate(
+            coin, pToken, poolCoins, q, address(feeVault), platform, poolFee, poolCreatorShareBps
+        ) returns (
+            bytes32 poolId
+        ) {
             graduated = true;
             uint256 burned = trackedTokens - poolCoins;
             trackedQuote = 0;
@@ -251,7 +265,7 @@ contract BondingCurve is ReentrancyGuard {
 
     function _payFee(uint256 fee) internal {
         if (fee == 0) return;
-        uint256 toCreator = (fee * CREATOR_SHARE_BPS) / BPS;
+        uint256 toCreator = (fee * creatorShareBps) / BPS;
         if (toCreator > 0) {
             pToken.forceApprove(address(feeVault), toCreator);
             feeVault.deposit(address(coin), address(pToken), toCreator);

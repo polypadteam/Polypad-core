@@ -233,11 +233,11 @@ contract TradeTest is PolypadBase {
         uint256 buyPrice = (uint256(600_000) * 10_025 + 9_999) / 10_000;
         uint256 expectedShares = (uint256(600e6) * 1e6) / buyPrice;
         assertEq(p.totalSupply(), expectedShares);
-        // Curve holds the shares net of fees; fees went 70/30 to creator and platform.
-        uint256 fee = expectedShares / 100;
+        // Curve holds the shares net of the 1.4% fee; the fee went half to the creator side, half to the platform.
+        uint256 fee = expectedShares * 140 / 10_000;
         assertEq(curve.trackedQuote(), expectedShares - fee);
-        assertEq(vault.owed(address(p), creator), fee * 7_000 / 10_000);
-        assertEq(p.balanceOf(platform), fee - fee * 7_000 / 10_000);
+        assertEq(vault.owed(address(p), creator), fee * 5_000 / 10_000);
+        assertEq(p.balanceOf(platform), fee - fee * 5_000 / 10_000);
     }
 
     function test_sellReturnsUsdgAndBurnsShares() public {
@@ -245,8 +245,8 @@ contract TradeTest is PolypadBase {
         uint256 before = usdg.balanceOf(alice);
         uint256 out = _sell(alice, curve, coins);
         assertEq(usdg.balanceOf(alice), before + out);
-        // Round trip costs two 1% fees and two 0.25% spreads, about 2.5%.
-        assertApproxEqRel(out, 600e6 * 975 / 1000, 0.005e18);
+        // Round trip costs two 1.4% curve fees and two 0.25% spreads, about 3.3%.
+        assertApproxEqRel(out, 600e6 * 967 / 1000, 0.005e18);
         assertEq(coin.balanceOf(alice), 0);
         // Only the fee shares remain in circulation.
         assertEq(
@@ -272,7 +272,7 @@ contract TradeTest is PolypadBase {
         uint256 out = router.sell(curve, coins, 0, alice, sq, _sign(sq, signerPk));
         vm.stopPrank();
         // Back at 59c less the spread and two curve fees.
-        assertApproxEqRel(out, 610e6 * 59 / 61 * 975 / 1000, 0.005e18);
+        assertApproxEqRel(out, 610e6 * 59 / 61 * 967 / 1000, 0.005e18);
     }
 
     /// @dev The design doc's step 3: the odds move and the coin's dollar value follows with no trade.

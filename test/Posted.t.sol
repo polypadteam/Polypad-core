@@ -76,9 +76,9 @@ contract PostedTest is PolypadBase {
         uint256 before = usdg.balanceOf(alice);
         uint256 out = _sellPosted(alice, coins);
         assertEq(usdg.balanceOf(alice) - before, out);
-        // Round trip costs both spreads and the curve fees, never more than ~5%.
+        // Round trip costs both posted spreads (1.5%) and the curve fees (1.4%), about 6%.
         assertLt(out, 300e6);
-        assertGt(out, 285e6);
+        assertGt(out, 280e6);
     }
 
     function _alive() internal {

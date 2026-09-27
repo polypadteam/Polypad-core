@@ -19,11 +19,13 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 | Contract | Role |
 | --- | --- |
 | `LaunchFactory` | Launches a coin: deploys the `Coin` (1B supply) and its `BondingCurve` |
-| `BondingCurve` | Constant-product curve over a virtual reserve; trades the coin against the market's pToken; 1% fee (60% creator, 20% float, 20% platform) |
+| `BondingCurve` | Constant-product curve over a virtual reserve; trades the coin against the market's pToken; fees fixed at launch (1.4% on the curve, 1% in the pool, half to the creator side) — see [docs/FEES.md](docs/FEES.md) |
 | `PToken` | One per Polymarket outcome: a 1:1 claim on a real share |
 | `PExchange` | USDG ⇄ pToken at a verified price; holds the float; caps unbacked supply per market and outflow per hour |
 | `PriceOracle` | Verifies signed quotes, holds posted prices, and each market's pause and settlement |
 | `Router` | One-transaction USDG buys and sells; emits one `Swap` per trade |
+| `Graduator` | Moves a sold-out curve into a Uniswap v4 pool it owns forever (locked liquidity); the pools' only hook |
+| `FeeVault` | Receives the creator side of every fee: the creator's claimable balance, and an opt-in dividend streamed to the coin's holders |
 
 ### Prices
 

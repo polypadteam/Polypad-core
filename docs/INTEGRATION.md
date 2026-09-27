@@ -7,7 +7,7 @@ holders and graduation, and to let their users buy and sell.
 Chain: **Robinhood Chain** (EVM, chain id `4663`). Quote currency for users:
 **USDG** (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`, 6 decimals).
 
-> Launch contracts, deployed at block 73,903,689 and verified on Sourcify.
+> Launch contracts, deployed at block 73,952,630 and verified on Sourcify.
 
 ## What a Polypad coin is
 
@@ -27,12 +27,12 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x8ca6a523a02e9caA8587eaCC577B8C432036577A` | Creates coins; emits `Launched` |
-| Router | `0xEf23A4B7e806580a0a5D87E52fDAdA234837E356` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x8Cf488ee4084e922e57a935FA63136ff4FEfEd20` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0x0A071A1C3DE334307Fb43d0d91e78564990338BA` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0xCE39cD9b7590e82591CF9d6e00ecD180feB82000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
-| FeeVault | `0x2b7aB13bfEDD8F4150e4339ea9bACE5280504D12` | Creator fees and holder dividends |
+| LaunchFactory | `0x6bD4DfcFbEB52F36330214F280DA981be08A347c` | Creates coins; emits `Launched` |
+| Router | `0xE2cD9e78a1bC6BFe040AfF72D138713549A59454` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0x574b75E7Ad4CceF103573a1fFD10C25AB2423AF8` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0x5BB537e4D5CDae0E0A9Ee248Cb538c984e051780` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0xd1C0DB193a7a84768E152a61b3297fF4D153e000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| FeeVault | `0x34777A4C2FA26EC648761f1FfEA99867959929E5` | Creator fees and holder dividends |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
@@ -147,11 +147,11 @@ event Graduated(address indexed coin, address indexed pToken, bytes32 indexed po
 ```
 
 - Pool key: `currency0/1` = the coin and its pToken sorted by address, `fee`
-  10000 (1%), `tickSpacing` 200, `hooks` = the Graduator. `Graduator.poolKey(coin)`
-  returns it.
+  = the coin's `poolFee()` (10000 = 1% by default), `tickSpacing` 200, `hooks`
+  = the Graduator. `Graduator.poolKey(coin)` returns it.
 - One full-range position, owned by the Graduator and never removed: the
-  liquidity is locked. Fees go 70% to the creator side (the FeeVault, below),
-  30% to the platform.
+  liquidity is locked. Its fees go the coin's `poolCreatorShareBps` (half by
+  default) to the creator side (the FeeVault, below), the rest to the platform.
 - The pool opens at the curve's final price; unused reserve coins are sent to
   `0x…dEaD`.
 - After graduation the curve no longer trades. Trades are ordinary v4 `Swap`
@@ -161,10 +161,20 @@ event Graduated(address indexed coin, address indexed pToken, bytes32 indexed po
   route to the pool once the coin has graduated. `Router.quotePool(curve,
   pTokenIn, amount)` (call it with `eth_call`) quotes a pool trade.
 
+## Fees
+
+A coin's fees are fixed when it launches: `BondingCurve.feeBps()` on the curve
+(1.4% by default), `poolFee()` in its pool after graduation (1% by default),
+and the creator side's share of each (`creatorShareBps()`,
+`poolCreatorShareBps()`, half by default). USDG ⇄ pToken conversions add the
+exchange spread (`PExchange.buySpreadBps()` / `sellSpreadBps()`, 0.25%).
+`GET /v1/fees` returns the live schedule and `/v1/coins/<address>` each coin's
+own. The full schedule, with limits, is in [FEES.md](FEES.md).
+
 ## Creator fees and holder dividends — FeeVault
 
-The creator's 70% of every fee, on the curve and in the pool, goes to the
-FeeVault. At launch the creator chooses `holdersBps`, the part of it paid to the
+The creator side of every fee (half, by default), on the curve and in the
+pool, goes to the FeeVault. At launch the creator chooses `holdersBps`, the part of it paid to the
 coin's holders instead, fixed for the life of the coin:
 
 - The creator's part is claimable any time: `withdraw(asset, to)` as pToken, or

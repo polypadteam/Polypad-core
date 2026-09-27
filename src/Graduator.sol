@@ -25,10 +25,10 @@ import {PoolIdLibrary} from "v4-core/src/types/PoolId.sol";
  *         liquidity forever, paying its trading fees to the creator and platform.
  *
  * Each graduated coin gets one ordinary v4 pool against its market's pToken:
- * 1% LP fee, tick spacing 200, one full-range position. The position is never
- * removed, so the liquidity is locked. Fees accrue to the position and anyone
- * can `collect` them: 70% to the coin's creator side (the FeeVault), 30% to the
- * platform, in both tokens.
+ * the LP fee fixed at the coin's launch (1% by default), tick spacing 200, one
+ * full-range position. The position is never removed, so the liquidity is
+ * locked. Fees accrue to the position and anyone can `collect` them: the coin's
+ * creator share to its FeeVault, the rest to the platform, in both tokens.
  *
  * This contract is also the pools' hook, with one permission: `beforeInitialize`,
  * which lets only this contract create a Polypad pool. Without it anyone could
@@ -43,10 +43,8 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using PoolIdLibrary for PoolKey;
 
-    uint24 public constant FEE = 10_000; // 1%
     int24 public constant TICK_SPACING = 200;
     uint256 public constant BPS = 10_000;
-    uint256 public constant CREATOR_SHARE_BPS = 7_000;
 
     IPoolManager public immutable poolManager;
     /// @notice The factory whose curves may graduate here.
@@ -57,6 +55,7 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
         address feeVault;
         address platform;
         uint128 liquidity;
+        uint16 creatorShareBps;
     }
 
     mapping(address coin => Pool) internal pools;
@@ -90,20 +89,25 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
      *         priced at `pTokens / coins`. Dust that does not fit the position
      *         goes to the platform.
      */
-    function graduate(IERC20 coin, IERC20 pToken, uint256 coins, uint256 pTokens, address feeVault, address platform)
-        external
-        nonReentrant
-        returns (bytes32 poolId)
-    {
+    function graduate(
+        IERC20 coin,
+        IERC20 pToken,
+        uint256 coins,
+        uint256 pTokens,
+        address feeVault,
+        address platform,
+        uint24 fee,
+        uint16 creatorShareBps
+    ) external nonReentrant returns (bytes32 poolId) {
         if (!IsCurve(factory).isCurve(msg.sender)) revert OnlyCurve();
         if (pools[address(coin)].liquidity != 0) revert AlreadyGraduated(address(coin));
 
         coin.safeTransferFrom(msg.sender, address(this), coins);
         pToken.safeTransferFrom(msg.sender, address(this), pTokens);
 
-        PoolKey memory key = _key(address(coin), address(pToken));
+        PoolKey memory key = _key(address(coin), address(pToken), fee);
         uint128 liquidity = address(coin) < address(pToken) ? _seed(key, coins, pTokens) : _seed(key, pTokens, coins);
-        pools[address(coin)] = Pool(key, feeVault, platform, liquidity);
+        pools[address(coin)] = Pool(key, feeVault, platform, liquidity, creatorShareBps);
 
         // Rounding leaves a few units behind; they are not worth a second position.
         uint256 coinDust = coin.balanceOf(address(this));
@@ -117,7 +121,7 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
 
     /* ------------------------------------------------------------ fees */
 
-    /// @notice Pay a graduated coin's accrued pool fees: 70% to its FeeVault, 30% platform.
+    /// @notice Pay a graduated coin's accrued pool fees: its creator share to its FeeVault, the rest to the platform.
     function collect(address coin) external nonReentrant returns (uint256 fee0, uint256 fee1) {
         Pool storage p = pools[coin];
         if (p.liquidity == 0) revert NotGraduated(coin);
@@ -127,8 +131,8 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
         IERC20 t1 = IERC20(Currency.unwrap(p.key.currency1));
         fee0 = t0.balanceOf(address(this));
         fee1 = t1.balanceOf(address(this));
-        _split(coin, t0, fee0, p.feeVault, p.platform);
-        _split(coin, t1, fee1, p.feeVault, p.platform);
+        _split(coin, t0, fee0, p);
+        _split(coin, t1, fee1, p);
         emit FeesCollected(coin, fee0, fee1);
     }
 
@@ -194,12 +198,12 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
 
     /* ------------------------------------------------------------ internal */
 
-    function _key(address coin, address pToken) internal view returns (PoolKey memory) {
+    function _key(address coin, address pToken, uint24 fee) internal view returns (PoolKey memory) {
         bool coinIs0 = coin < pToken;
         return PoolKey({
             currency0: Currency.wrap(coinIs0 ? coin : pToken),
             currency1: Currency.wrap(coinIs0 ? pToken : coin),
-            fee: FEE,
+            fee: fee,
             tickSpacing: TICK_SPACING,
             hooks: IHooks(address(this))
         });
@@ -232,14 +236,14 @@ contract Graduator is IUnlockCallback, ReentrancyGuard {
         }
     }
 
-    function _split(address coin, IERC20 t, uint256 amount, address feeVault, address platform) internal {
+    function _split(address coin, IERC20 t, uint256 amount, Pool storage p) internal {
         if (amount == 0) return;
-        uint256 toCreator = (amount * CREATOR_SHARE_BPS) / BPS;
+        uint256 toCreator = (amount * p.creatorShareBps) / BPS;
         if (toCreator > 0) {
-            t.forceApprove(feeVault, toCreator);
-            IFeeVault(feeVault).deposit(coin, address(t), toCreator);
+            t.forceApprove(p.feeVault, toCreator);
+            IFeeVault(p.feeVault).deposit(coin, address(t), toCreator);
         }
-        if (amount > toCreator) t.safeTransfer(platform, amount - toCreator);
+        if (amount > toCreator) t.safeTransfer(p.platform, amount - toCreator);
     }
 
     /// @dev Liquidity for both amounts at `sqrtP` over [sqrtA, sqrtB], the smaller of the two.

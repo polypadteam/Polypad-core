@@ -5,6 +5,8 @@ import {IHooks} from "v4-core/src/interfaces/IHooks.sol";
 import {Currency} from "v4-core/src/types/Currency.sol";
 import {PoolKey} from "v4-core/src/types/PoolKey.sol";
 
+import {Fees} from "../src/Fees.sol";
+import {LaunchFactory} from "../src/LaunchFactory.sol";
 import {BondingCurve} from "../src/BondingCurve.sol";
 import {Coin} from "../src/Coin.sol";
 import {Graduator} from "../src/Graduator.sol";
@@ -76,7 +78,7 @@ contract ScaleTest is PolypadBase {
         assertApproxEqRel(out, 500e6 * 975 / 1000, 0.01e18);
     }
 
-    function test_poolFeesSplit70To30() public {
+    function test_poolFeesSplitHalfAndHalf() public {
         _graduate();
         for (uint256 i; i < 5; ++i) {
             (uint256 c,) = _buy(bob, curve, 1_000e6);
@@ -89,7 +91,7 @@ contract ScaleTest is PolypadBase {
         uint256 toPlatform = p.balanceOf(platform) - platformBefore;
         // ~$5k of pToken bought through the pool: ~1% of it in pToken fees.
         assertGt(toCreator, 0);
-        assertApproxEqRel(toCreator * 3, toPlatform * 7, 0.001e18);
+        assertApproxEqRel(toCreator, toPlatform, 0.001e18);
         assertGt(vault.owed(address(coin), creator), 0); // sell-side fees come in coins
     }
 
@@ -108,7 +110,7 @@ contract ScaleTest is PolypadBase {
 
     function test_onlyFactoryCurvesGraduate() public {
         vm.expectRevert(Graduator.OnlyCurve.selector);
-        graduator.graduate(coin, p, 1, 1, alice, alice);
+        graduator.graduate(coin, p, 1, 1, alice, alice, 10_000, 5_000);
     }
 
     function test_curveRefusesDirectTradesAfterGraduation() public {
@@ -291,5 +293,36 @@ contract ScaleTest is PolypadBase {
             spent += 100e6 + (uint256(keccak256(abi.encode(i))) % 2_000e6);
         }
         assertEq(paid, n * 5_000e6 - spent + owed);
+    }
+
+    function test_poolUsesTheFeeTheCoinLaunchedWith() public {
+        // Fees set after this coin launched apply only to later coins.
+        vm.prank(owner);
+        factory.setFees(Fees(200, 3_000, 15_000, 8_000));
+        _graduate();
+        assertEq(graduator.poolKey(address(coin)).fee, 10_000);
+        assertEq(curve.feeBps(), 140);
+        (, BondingCurve later) = _launch(ID);
+        assertEq(later.feeBps(), 200);
+        assertEq(later.poolFee(), 15_000);
+        assertEq(later.creatorShareBps(), 3_000);
+        assertEq(later.poolCreatorShareBps(), 8_000);
+    }
+
+    function test_feesStayInsideTheirCaps() public {
+        vm.startPrank(owner);
+        vm.expectRevert(LaunchFactory.BadFees.selector);
+        factory.setFees(Fees(201, 5_000, 10_000, 5_000));
+        vm.expectRevert(LaunchFactory.BadFees.selector);
+        factory.setFees(Fees(140, 5_000, 15_001, 5_000));
+        vm.expectRevert(LaunchFactory.BadFees.selector);
+        factory.setFees(Fees(140, 2_999, 10_000, 5_000));
+        vm.expectRevert(LaunchFactory.BadFees.selector);
+        factory.setFees(Fees(140, 5_000, 10_000, 8_001));
+        vm.expectRevert(LaunchFactory.BadFees.selector);
+        factory.setFees(Fees(0, 5_000, 10_000, 5_000));
+        vm.stopPrank();
+        vm.expectRevert();
+        factory.setFees(Fees(140, 5_000, 10_000, 5_000));
     }
 }
