@@ -34,6 +34,10 @@ contract MockUSDG is ERC20 {
         frozen[who] = true;
     }
 
+    function unfreeze(address who) external {
+        frozen[who] = false;
+    }
+
     function _update(address from, address to, uint256 value) internal override {
         require(!frozen[from] && !frozen[to], "frozen");
         super._update(from, to, value);

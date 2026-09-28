@@ -196,15 +196,21 @@ contract ScaleTest is PolypadBase {
         assertEq(exchange.queued(), owedA);
         assertEq(exchange.freeFloat(), 0);
 
-        // Alice takes it to another address.
-        address fresh = makeAddr("fresh");
+        // Alice cannot route it around her freeze: it pays only her, so it waits.
         vm.prank(alice);
-        exchange.withdrawUnclaimed(fresh);
-        assertEq(usdg.balanceOf(fresh), owedA);
+        vm.expectRevert();
+        exchange.withdrawUnclaimed(alice);
+        assertEq(exchange.unclaimed(alice), owedA);
+        // Once unfrozen she takes it.
+        usdg.unfreeze(alice);
+        uint256 before = usdg.balanceOf(alice);
+        vm.prank(alice);
+        exchange.withdrawUnclaimed(alice);
+        assertEq(usdg.balanceOf(alice) - before, owedA);
         assertEq(exchange.queued(), 0);
         vm.prank(alice);
         vm.expectRevert(PExchange.ZeroAmount.selector);
-        exchange.withdrawUnclaimed(fresh);
+        exchange.withdrawUnclaimed(alice);
     }
 
     /// A set-aside claim keeps its USDG: later claims in the queue are paid only
@@ -231,11 +237,12 @@ contract ScaleTest is PolypadBase {
         assertEq(exchange.queueLength(), 1, "Bob is not paid out of Alice's reserve");
         assertEq(usdg.balanceOf(address(exchange)), owedA);
 
-        // Alice (with a fresh address) can always take hers.
-        address fresh = makeAddr("fresh");
+        // Alice can always take hers once her address works again.
+        usdg.unfreeze(alice);
+        uint256 before = usdg.balanceOf(alice);
         vm.prank(alice);
-        exchange.withdrawUnclaimed(fresh);
-        assertEq(usdg.balanceOf(fresh), owedA);
+        exchange.withdrawUnclaimed(alice);
+        assertEq(usdg.balanceOf(alice) - before, owedA);
         assertEq(exchange.unclaimedTotal(), 0);
         // Bob is paid once the float covers him.
         usdg.mint(address(exchange), owedB);

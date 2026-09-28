@@ -174,21 +174,36 @@ contract ExchangeInvariantsTest is PolypadBase {
     }
 
     /// @dev PExchange's `hourFloat` slot (`forge inspect PExchange storageLayout`).
+    /// `hourFloat` (uint64 hour | uint96 amount | uint96 base), from `forge inspect PExchange storage-layout`.
     uint256 internal constant HOUR_FLOAT_SLOT = 26;
 
-    /// Within a clock hour, what left through redemptions never passes the cap
-    /// fixed by the float snapshot taken at the hour's first trade.
+    /// Within a clock hour, what left through redemptions (paid or queued) never
+    /// passes the cap fixed by the hour's float snapshot. Mints add no room.
     function invariant_hourOutflowWithinSnapshotCap() public view {
         uint256 word = uint256(vm.load(address(exchange), bytes32(HOUR_FLOAT_SLOT)));
         uint256 snapHour = uint64(word);
-        uint256 snapAmount = word >> 64;
+        uint256 base = uint96(word >> 160);
         uint256 hour = block.timestamp / 3_600;
         assertLe(snapHour, hour, "hourFloat slot moved: update HOUR_FLOAT_SLOT");
         if (snapHour != hour) return;
-        uint256 cap = (snapAmount * exchange.outflowFloatBps()) / 10_000;
+        uint256 cap = (base * exchange.outflowFloatBps()) / 10_000;
         if (cap < exchange.outflowFloor()) cap = exchange.outflowFloor();
+        // Exactly the exchange's rule: remaining = cap - outflow over the sliding
+        // hour (floored at 0); mints add no room.
+        uint256 into = block.timestamp % 3_600;
+        uint256 out = exchange.outflowInHour(hour) + (exchange.outflowInHour(hour - 1) * (3_600 - into)) / 3_600;
+        assertEq(exchange.outflowRemaining(), out >= cap ? 0 : cap - out, "remaining != cap - outflow");
         assertLe(exchange.outflowInHour(hour), cap);
-        assertLe(exchange.outflowRemaining() + exchange.outflowInHour(hour), cap);
+    }
+
+    /// Backing never exceeds supply: a report is clamped to supply, and every
+    /// burn (sale, release, absorb) lowers backing by what it burned. So the gap
+    /// between a burn and the desk's next report can never be minted unhedged.
+    function invariant_backedNeverAboveSupply() public view {
+        for (uint256 m; m < 2; ++m) {
+            uint256 id = m == 0 ? ID : ID_B;
+            assertLe(exchange.backed(id), exchange.pTokenOf(id).totalSupply(), "backing above supply");
+        }
     }
 
     /// No redemption paid or queued more at once than the hour's cap had left,

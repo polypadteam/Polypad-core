@@ -190,15 +190,9 @@ contract ExchangeHandler is Test {
 
     uint256 public knownDelayed;
 
-    /// Length of `exchange.delayed` (the contract has no length getter): probe past what is known.
+    /// Length of `exchange.delayed`.
     function _delayedLength() internal returns (uint256) {
-        while (true) {
-            try exchange.delayed(knownDelayed) returns (address, uint64, uint256, uint128, uint128) {
-                ++knownDelayed;
-            } catch {
-                return knownDelayed;
-            }
-        }
+        knownDelayed = exchange.delayedLength();
         return knownDelayed;
     }
 
@@ -295,6 +289,16 @@ contract ExchangeHandler is Test {
         _hit("freeze");
     }
 
+    /// Paxos lifts a freeze: the actor can then take its set-aside claim itself.
+    function unfreeze(uint256 who) external {
+        ++calls;
+        address a = _pick(who);
+        if (!frozen[a]) return;
+        frozen[a] = false;
+        usdg.unfreeze(a);
+        _hit("unfreeze");
+    }
+
     /// The path to a set-aside claim, in one step: an actor sells with the float
     /// at the desk (so the sale queues), then gets frozen before it is paid.
     function queueThenFreeze(uint256 who, uint256 m) external books {
@@ -319,8 +323,10 @@ contract ExchangeHandler is Test {
         ++calls;
         address a = _pick(who);
         if (exchange.unclaimed(a) == 0) return;
-        vm.prank(a);
-        try exchange.withdrawUnclaimed(sinkOf[a]) {
+        // Anyone may trigger it (here another actor); it pays only `a`, so while
+        // `a` is frozen it reverts: no routing around a freeze.
+        vm.prank(_pick(who + 1));
+        try exchange.withdrawUnclaimed(a) {
             _hit("withdrawUnclaimed");
         } catch {}
     }

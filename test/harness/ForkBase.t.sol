@@ -20,6 +20,7 @@ import {Deploy} from "../../script/Deploy.s.sol";
 /// @dev The parts of Paxos's USDG (a facet proxy) the fork tests drive.
 interface IUSDG {
     function freeze(address) external;
+    function unfreeze(address) external;
     function isFrozen(address) external view returns (bool);
     function pause() external;
     function unpause() external;

@@ -27,12 +27,12 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x9113bCe8C11c59989ce7280C7059e113C395E0c6` | Creates coins; emits `Launched` |
-| Router | `0x4a5A23C56D94B0fc588F388Dc7ADb6903D125562` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x84A04b7D2A6b27edbdD345ab24e9100054E380bF` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0x101a82DAedBeD2d3aDE34436959b3c9aE113a947` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0xe073c70954197073a007544c70A25318f1DD2000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
-| FeeVault | `0x4B082719a79A002364797B5DEeb0368393E08DBD` | Creator fees and holder dividends |
+| LaunchFactory | `0x190BA7f1595EC10d76204E20EF55e47493D445e7` | Creates coins; emits `Launched` |
+| Router | `0x4bAac498BbAa78e6129f30Ac3F6937ec49Dc68b9` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0xc40dfB9b9E097117232b78c734375eF80cd29ad7` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0xC89fA2CcE204ca69e72D0746e17214ddc7964c6C` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0x284f1FFBAd2cE392E1cB47Bd7A8e52b20e0a6000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| FeeVault | `0x8B1e009f160B781e4cE1DeEE24F1085C693e364C` | Creator fees and holder dividends |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket

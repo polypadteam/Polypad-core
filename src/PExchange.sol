@@ -25,7 +25,9 @@ import {PriceOracle} from "./PriceOracle.sol";
  * ## What backs a pToken
  *
  * Real shares in the desk's Polymarket wallet, plus shares the desk is still
- * buying. The keeper reports the held amount as `backed`. Minting stops for a
+ * buying. The keeper reports the held amount as `backed`, never more than the
+ * supply, and every burn lowers it at once, so shares the desk has yet to sell
+ * after a redemption cannot be minted again unhedged. Minting stops for a
  * market once the unbacked supply (`totalSupply - backed`) times what a share
  * could still rise by (`1 - price`) would pass `maxRisk`, in USDG. That caps
  * what a missed fill or a stale price can cost per market, and lets the desk
@@ -64,16 +66,22 @@ import {PriceOracle} from "./PriceOracle.sol";
  * ## Circuit breaker
  *
  * USDG owed by redemptions is metered over a sliding hour: the previous clock
- * hour counts for the part of it still inside the last hour. The hourly cap
+ * hour counts for the part of it still inside the last hour (so up to about two
+ * caps can leave within 3,600 seconds across a boundary). It is gross, not net
+ * of mints: crediting mints would let a stolen signing key spend honest buyers'
+ * money on top of the cap. So a buy and sale back to back does use the cap, and
+ * can push honest sellers into the delay for the spread it costs. The hourly cap
  * scales with the float: `outflowFloatBps` of the float (less the queue) as it
  * stood when the clock hour began, before any of its trades (or when the one
  * before it began, if that was less), and never less than `outflowFloor`.
  * Trades inside the hour do not move it, so neither selling nor minting and
- * selling in a loop can raise it, and money put in just before the hour turns
- * does not count until it has stayed a full hour. A sale is never refused for the cap. The part over it is
- * delayed instead: its pToken is held here and its price is fixed, and after
+ * selling in a loop can raise it, and money put in just before an hour turns
+ * cannot lift that hour's cap above the float at the last snapshot. A sale is never refused for the cap (unless
+ * the part over it is under `MIN_DELAYED`: dust tickets are refused). The part
+ * over it is delayed instead: its pToken is held here and its price is fixed,
+ * and it is not reserved in the float until released. After
  * `DELAY` anyone can `release` it into the queue. Until then the owner can
- * `cancel` it, which gives the pToken back. So a leaked signing key or a
+ * `cancel` it, which gives the pToken to the sale's payee. So a leaked signing key or a
  * pricing bug cannot take more than the cap in an hour, and what it tries past
  * that waits where the owner can stop it; an honest seller past the cap gets
  * their price, an hour later. The keeper (or owner) can `halt` every mint,
@@ -148,6 +156,8 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     bool public bridgeEverSet;
 
     mapping(uint256 hour => uint256) public outflowInHour;
+    /// @notice The smallest part of a sale that may be delayed; below it the sale reverts.
+    uint256 public constant MIN_DELAYED = 1e6;
 
     /// @dev The free float at the first mint or redeem of `hour`, before that
     ///      trade moved it (`amount`), and the hour's cap base: the lower of it
@@ -224,6 +234,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     error NothingPending();
     error NotRescuable(address token);
     error SettledAtZero(uint256 positionId);
+    error DustOverCap(uint256 amount);
 
     modifier onlyKeeper() {
         if (msg.sender != keeper) revert OnlyKeeper();
@@ -312,6 +323,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         amount = p.balanceOf(address(this)) - delayedShares[id];
         if (amount == 0) return 0;
         p.burn(address(this), amount);
+        _unback(id, amount);
         emit Absorbed(id, amount);
     }
 
@@ -324,16 +336,17 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         return _payQueue(max);
     }
 
-    /// @notice Withdraw a claim the queue could not deliver, to any address.
+    /// @notice Pay a claim the queue could not deliver to the address it was owed
+    ///         to (never elsewhere: that would route around a USDG freeze). Anyone
+    ///         may call, for a recipient that cannot call itself.
     function withdrawUnclaimed(address to) external nonReentrant returns (uint256 amount) {
-        if (to == address(0)) revert BadParams();
-        amount = unclaimed[msg.sender];
+        amount = unclaimed[to];
         if (amount == 0) revert ZeroAmount();
-        unclaimed[msg.sender] = 0;
+        unclaimed[to] = 0;
         unclaimedTotal -= amount;
         queued -= amount;
         usdg.safeTransfer(to, amount);
-        emit UnclaimedWithdrawn(msg.sender, to, amount);
+        emit UnclaimedWithdrawn(to, to, amount);
     }
 
     /// @notice Claims still waiting.
@@ -353,11 +366,17 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         delete delayed[ticket];
         delayedShares[d.positionId] -= d.pAmount;
         pTokenOf[d.positionId].burn(address(this), d.pAmount);
+        _unback(d.positionId, d.pAmount);
         emit Released(ticket);
         _pay(d.to, d.amount, true);
     }
 
-    /// @notice Undo a delayed sale before it is released: the pToken goes back to the seller.
+    function delayedLength() external view returns (uint256) {
+        return delayed.length;
+    }
+
+    /// @notice Undo a delayed sale before it is released: the pToken goes back to
+    ///         the sale's payee (`to`).
     function cancel(uint256 ticket) external onlyOwner {
         DelayedSale memory d = delayed[ticket];
         if (d.to == address(0)) revert NothingPending();
@@ -373,8 +392,13 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     function reportBacked(uint256[] calldata ids, uint256[] calldata amounts) external onlyKeeper {
         if (ids.length != amounts.length) revert BadParams();
         for (uint256 i; i < ids.length; ++i) {
-            backed[ids[i]] = amounts[i];
-            emit BackedReported(ids[i], amounts[i]);
+            // Shares beyond supply back nothing: counting them would let the
+            // excess be minted unhedged (or, from a stolen keeper key, any amount).
+            PToken p = pTokenOf[ids[i]];
+            uint256 supply = address(p) == address(0) ? 0 : p.totalSupply();
+            uint256 amount = amounts[i] < supply ? amounts[i] : supply;
+            backed[ids[i]] = amount;
+            emit BackedReported(ids[i], amount);
         }
     }
 
@@ -532,8 +556,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         // an hour boundary.
         uint256 hour = block.timestamp / 3_600;
         uint256 intoHour = block.timestamp % 3_600;
-        uint256 prev = hour == 0 ? 0 : outflowInHour[hour - 1];
-        uint256 used = outflowInHour[hour] + (prev * (3_600 - intoHour)) / 3_600;
+        uint256 used = _sliding(outflowInHour, hour, intoHour);
         HourFloat memory f = hourFloat;
         uint256 cap = ((f.hour == hour ? f.base : _base(f, freeFloat())) * outflowFloatBps) / BPS;
         if (cap < outflowFloor) cap = outflowFloor;
@@ -541,6 +564,22 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     }
 
     /* ------------------------------------------------------------ internal */
+
+    function _sliding(mapping(uint256 => uint256) storage m, uint256 hour, uint256 intoHour)
+        internal
+        view
+        returns (uint256)
+    {
+        uint256 prev = hour == 0 ? 0 : m[hour - 1];
+        return m[hour] + (prev * (3_600 - intoHour)) / 3_600;
+    }
+
+    /// @dev Burned shares no longer need backing: lower it with them, so the gap
+    ///      until the desk reports again cannot be minted unhedged.
+    function _unback(uint256 id, uint256 n) internal {
+        uint256 b = backed[id];
+        backed[id] = b > n ? b - n : 0;
+    }
 
     /// @dev Record the float for the outflow cap at the hour's first trade, before it moves it.
     function _markHour() internal {
@@ -616,6 +655,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         emit Redeemed(id, to, amountIn, out, price);
         if (out == 0) {
             p.burn(msg.sender, amountIn);
+            _unback(id, amountIn);
             return 0;
         }
         uint256 remaining = outflowRemaining();
@@ -623,7 +663,10 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         outflowInHour[block.timestamp / 3_600] += now_;
         // The part over the cap waits: its pToken is held here, its price fixed.
         uint256 pLater = now_ < out ? (amountIn * (out - now_)) / out : 0;
+        // Dust tickets would only flood the release scan and the alert.
+        if (pLater > 0 && out - now_ < MIN_DELAYED) revert DustOverCap(out - now_);
         p.burn(msg.sender, amountIn);
+        _unback(id, amountIn - pLater);
         if (pLater > 0) {
             p.mint(address(this), pLater);
             delayedShares[id] += pLater;

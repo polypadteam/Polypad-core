@@ -240,13 +240,10 @@ contract AccessGovernanceTest is PolypadBase {
         PToken pb = exchange.pTokenOf(ID_B);
         c; // the coin is irrelevant: the thief trades shares directly
 
-        // Keeper (stolen) reports enough backing for a big mint.
-        uint256[] memory ids = new uint256[](1);
-        uint256[] memory amts = new uint256[](1);
-        ids[0] = ID_B;
-        amts[0] = 1_000_000e6;
-        vm.prank(keeper);
-        exchange.reportBacked(ids, amts);
+        // Room for a big mint (backing cannot be reported above supply, so the
+        // owner lifts this market's risk cap for the test).
+        vm.prank(owner);
+        exchange.setMaxRisk(ID_B, type(uint256).max);
 
         // The thief buys 10k USDG of 30c shares at a legit quote.
         usdg.mint(thief, 10_000e6);

@@ -940,6 +940,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "MIN_DELAYED",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "absorb",
     "inputs": [
       {
@@ -1127,6 +1140,19 @@ export const pExchangeAbi = [
         "name": "amount",
         "type": "uint128",
         "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "delayedLength",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -2668,6 +2694,17 @@ export const pExchangeAbi = [
     "type": "error",
     "name": "BridgeChangeDelayed",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DustOverCap",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",

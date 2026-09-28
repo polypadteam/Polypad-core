@@ -40,9 +40,19 @@ contract ExchangeTimingTest is PolypadBase {
         }
         _postOnChain(ID, 600_000);
         _postOnChain(ID_B, 300_000);
-        // Enough backing that the unbacked cap is out of the way unless a test wants it.
-        _back(ID, 1_000_000e6);
-        _back(ID_B, 1_000_000e6);
+        // The risk cap is out of the way unless a test turns it on (`_riskOn`).
+        // (Backing cannot be reported above supply, so it cannot be used for this.)
+        vm.startPrank(owner);
+        exchange.setMaxRisk(ID, type(uint256).max);
+        exchange.setMaxRisk(ID_B, type(uint256).max);
+        vm.stopPrank();
+    }
+
+    /// @dev The default $1,000 risk cap, nothing backed.
+    function _riskOn(uint256 id) internal {
+        vm.prank(owner);
+        exchange.setMaxRisk(id, 0);
+        _back(id, 0);
     }
 
     /* ------------------------------------------------------------ helpers */
@@ -264,7 +274,7 @@ contract ExchangeTimingTest is PolypadBase {
     /// unbacked cap and the outflow cap bound the total.
     /// v8: a quote covers `maxAmount` in total across every use, by anyone.
     function test_aQuoteCoversMaxAmountInTotalAcrossReplays() public {
-        _back(ID, 0);
+        _riskOn(ID);
         (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, BUY, 600_000, 300e6, uint64(block.timestamp + 15));
         vm.startPrank(alice);
         exchange.mint(address(pA), 100e6, 0, alice, q, sig);
@@ -381,17 +391,18 @@ contract ExchangeTimingTest is PolypadBase {
         assertEq(exchange.outflowRemaining(), 0);
         // v9: past the cap a sale is not refused. All of it waits.
         uint256 before = usdg.balanceOf(alice);
-        uint256 over = _redeem(alice, ID, 1e6);
-        assertEq(over, exchange.redeemOut(600_000, 1e6));
+        // (At least MIN_DELAYED: a smaller over-cap part reverts DustOverCap.)
+        uint256 over = _redeem(alice, ID, 2e6);
+        assertEq(over, exchange.redeemOut(600_000, 2e6));
         assertEq(usdg.balanceOf(alice), before, "an over-cap sale was paid at once");
         (address to, uint64 readyAt, uint256 id, uint256 pAmount, uint256 owed) = _delayed(0);
         assertEq(to, alice);
         assertEq(readyAt, block.timestamp + exchange.DELAY());
         assertEq(id, ID);
-        assertEq(pAmount, 1e6);
+        assertEq(pAmount, 2e6);
         assertEq(owed, over);
-        assertEq(exchange.delayedShares(ID), 1e6);
-        assertEq(pA.balanceOf(address(exchange)), 1e6);
+        assertEq(exchange.delayedShares(ID), 2e6);
+        assertEq(pA.balanceOf(address(exchange)), 2e6);
         // A sliding hour. One second later is a new clock hour, but the last one
         // still counts in full: no fresh cap at the boundary.
         vm.warp(block.timestamp + 1);
@@ -589,7 +600,7 @@ contract ExchangeTimingTest is PolypadBase {
         _fixedCap(1);
         assertEq(exchange.outflowRemaining(), 0);
         uint256 before = usdg.balanceOf(alice);
-        uint256 out = _redeem(alice, ID, 1e6);
+        uint256 out = _redeem(alice, ID, 2e6);
         assertEq(usdg.balanceOf(alice), before, "a sale with the hour closed was paid at once");
         (,,,, uint256 owed) = _delayed(0);
         assertEq(owed, out);
@@ -598,7 +609,7 @@ contract ExchangeTimingTest is PolypadBase {
     /* =============================================== 4. unbacked risk cap */
 
     function test_riskCapExactBoundary() public {
-        _back(ID, 0);
+        _riskOn(ID);
         // At 60c a share can rise 40c: $1,000 of risk is 2,500 unbacked shares.
         // At 60c + 0.25% the share costs 0.6015: 1,503.75 USDG buys exactly 2,500.
         assertEq(exchange.mintOut(600_000, 1_503_750_000), 2_500e6);
@@ -612,14 +623,14 @@ contract ExchangeTimingTest is PolypadBase {
     }
 
     function test_riskCapLetsNearCertainMarketsGoFurtherUnbacked() public {
-        _back(ID, 0);
+        _riskOn(ID);
         // At 98c a share can rise 2c: $1,000 of risk is 50,000 unbacked shares.
         _postOnChain(ID, 980_000);
         uint256 got = _mint(alice, ID, 40_000e6);
         assertGt(got, 40_000e6);
         // The same dollars at 20c would be 25x the risk: refused.
         _postOnChain(ID_B, 200_000);
-        _back(ID_B, 0);
+        _riskOn(ID_B);
         (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID_B, BUY);
         vm.prank(alice);
         vm.expectRevert();
@@ -629,7 +640,7 @@ contract ExchangeTimingTest is PolypadBase {
     }
 
     function test_riskStillCountsSharesHeldForDelayedSales() public {
-        _back(ID, 0);
+        _riskOn(ID);
         uint256 shares = _mint(alice, ID, 1_503_750_000); // at the cap
         _fixedCap(1);
         _redeem(alice, ID, shares); // all but 1 wei's worth delayed, held by the exchange
@@ -642,13 +653,13 @@ contract ExchangeTimingTest is PolypadBase {
     }
 
     function test_backingMovesTheCapAndSellsStillWorkWhenOverIt() public {
-        _back(ID, 0);
+        _riskOn(ID);
         uint256 shares = _mint(alice, ID, 1_503_750_000);
         _back(ID, 1_000e6);
         uint256 more = _mint(alice, ID, 601_500_000); // exactly 1,000 more shares
         assertEq(more, 1_000e6);
         // Desk reports less than it had: supply is now well over backing + cap.
-        _back(ID, 0);
+        _riskOn(ID);
         (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, BUY);
         vm.prank(alice);
         vm.expectRevert();
@@ -658,7 +669,7 @@ contract ExchangeTimingTest is PolypadBase {
     }
 
     function test_perMarketRiskOverrideAndItsZeroMeansDefault() public {
-        _back(ID, 0);
+        _riskOn(ID);
         vm.prank(owner);
         exchange.setMaxRisk(ID, 40e6); // 100 shares at 60c
         (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, BUY);
@@ -676,7 +687,7 @@ contract ExchangeTimingTest is PolypadBase {
 
     function test_settledMintsBypassTheRiskCap() public {
         _fixedCap(1_000_000e6);
-        _back(ID, 0);
+        _riskOn(ID);
         _settle(ID, 1e6);
         PriceOracle.Quote memory junk;
         vm.prank(alice);
@@ -775,13 +786,10 @@ contract ExchangeTimingTest is PolypadBase {
         exchange.payQueue(1);
         assertEq(exchange.unclaimed(alice), oa);
 
-        vm.startPrank(alice);
-        vm.expectRevert(PExchange.BadParams.selector);
-        exchange.withdrawUnclaimed(address(0));
-        // To itself (still frozen): the transfer reverts and nothing changes.
+        // Only to itself, and it is still frozen: the transfer reverts, nothing changes.
+        vm.prank(alice);
         vm.expectRevert();
         exchange.withdrawUnclaimed(alice);
-        vm.stopPrank();
         assertEq(exchange.unclaimed(alice), oa);
         // Someone else cannot take it.
         vm.prank(bob);
@@ -790,10 +798,11 @@ contract ExchangeTimingTest is PolypadBase {
         // Works while the exchange is halted: it is a debt, not a trade.
         vm.prank(keeper);
         exchange.halt();
-        address fresh = makeAddr("fresh");
+        usdg.unfreeze(alice);
+        uint256 before = usdg.balanceOf(alice);
         vm.prank(alice);
-        assertEq(exchange.withdrawUnclaimed(fresh), oa);
-        assertEq(usdg.balanceOf(fresh), oa);
+        assertEq(exchange.withdrawUnclaimed(alice), oa);
+        assertEq(usdg.balanceOf(alice) - before, oa);
         assertEq(exchange.queued(), 0);
     }
 
@@ -818,9 +827,11 @@ contract ExchangeTimingTest is PolypadBase {
         // v8: Alice's set-aside USDG stays hers. Bob waits for a refill.
         assertEq(exchange.queueLength(), 1);
         assertEq(usdg.balanceOf(address(exchange)), exchange.unclaimedTotal());
+        usdg.unfreeze(alice);
+        uint256 aliceBefore = usdg.balanceOf(alice);
         vm.prank(alice);
-        exchange.withdrawUnclaimed(makeAddr("fresh"));
-        assertEq(usdg.balanceOf(makeAddr("fresh")), oa);
+        exchange.withdrawUnclaimed(alice);
+        assertEq(usdg.balanceOf(alice) - aliceBefore, oa);
         uint256 bobBefore = usdg.balanceOf(bob);
         usdg.mint(address(exchange), ob);
         exchange.payQueue(10);

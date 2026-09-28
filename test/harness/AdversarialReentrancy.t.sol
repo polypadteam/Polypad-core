@@ -75,8 +75,8 @@ contract Reenterer {
         return ex.redeem(address(p), amount, 0, address(this), q_, sig_);
     }
 
-    function withdrawUnclaimed(address to) external {
-        ex.withdrawUnclaimed(to);
+    function withdrawUnclaimed() external {
+        ex.withdrawUnclaimed(address(this));
     }
 
     function onUsdgReceived(address, uint256) external {
@@ -201,11 +201,11 @@ contract AdversarialReentrancyTest is PolypadBase {
         assertEq(ex.queued(), owedR, "still owed, still reserved");
         assertEq(ex.freeFloat(), cb.balanceOf(address(ex)) - owedR);
 
-        // It can take it later, to another address.
+        // It can take it later, to itself only, once it accepts payment again.
         r.arm(Reenterer.Action.None, q, sig);
-        address safe = makeAddr("safe");
-        r.withdrawUnclaimed(safe);
-        assertEq(cb.balanceOf(safe), owedR);
+        uint256 before = cb.balanceOf(address(r));
+        r.withdrawUnclaimed();
+        assertEq(cb.balanceOf(address(r)) - before, owedR);
         assertEq(ex.queued(), 0);
     }
 
@@ -222,7 +222,7 @@ contract AdversarialReentrancyTest is PolypadBase {
 
         // Withdraw to itself and try to withdraw again from inside the payout.
         r.arm(Reenterer.Action.WithdrawUnclaimed, q, sig);
-        r.withdrawUnclaimed(address(r));
+        r.withdrawUnclaimed();
         _reentrancyBlocked();
         assertEq(ex.unclaimed(address(r)), 0);
         assertEq(ex.queued(), 0);

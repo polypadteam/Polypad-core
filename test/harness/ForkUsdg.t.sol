@@ -73,12 +73,19 @@ contract ForkUsdgTest is ForkBase {
         assertEq(exchange.queued(), owed[0], "still owed, still reserved");
         assertEq(exchange.freeFloat(), 0);
 
-        // A frozen address can still direct its claim elsewhere (USDG checks the
-        // recipient and the token holder, and the exchange is the holder).
-        address fresh = makeAddr("fresh");
+        // A frozen address cannot route its claim around the freeze: it is paid
+        // only to itself, which USDG refuses while frozen.
         vm.prank(alice);
-        exchange.withdrawUnclaimed(fresh);
-        assertEq(usdg.balanceOf(fresh), owed[0]);
+        vm.expectRevert();
+        exchange.withdrawUnclaimed(alice);
+        assertEq(exchange.unclaimed(alice), owed[0]);
+        // Once Paxos lifts the freeze, it takes it.
+        vm.prank(protector);
+        u.unfreeze(alice);
+        uint256 before = usdg.balanceOf(alice);
+        vm.prank(alice);
+        exchange.withdrawUnclaimed(alice);
+        assertEq(usdg.balanceOf(alice) - before, owed[0]);
         assertEq(exchange.queued(), 0);
     }
 
