@@ -122,21 +122,7 @@ export const priceOracleAbi = [
   },
   {
     "type": "function",
-    "name": "acceptPoster",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "acceptSigner",
-    "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "alive",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -199,19 +185,6 @@ export const priceOracleAbi = [
   },
   {
     "type": "function",
-    "name": "expire",
-    "inputs": [
-      {
-        "name": "ids",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "keeper",
     "inputs": [],
     "outputs": [
@@ -219,32 +192,6 @@ export const priceOracleAbi = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "maxPostAge",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint32",
-        "internalType": "uint32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "maxPosterSilence",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint32",
-        "internalType": "uint32"
       }
     ],
     "stateMutability": "view"
@@ -277,32 +224,6 @@ export const priceOracleAbi = [
   },
   {
     "type": "function",
-    "name": "pendingPoster",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "pendingPosterAt",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "pendingSigner",
     "inputs": [],
     "outputs": [
@@ -323,142 +244,6 @@ export const priceOracleAbi = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "post",
-    "inputs": [
-      {
-        "name": "ids",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      },
-      {
-        "name": "prices",
-        "type": "uint64[]",
-        "internalType": "uint64[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "postCooldown",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint32",
-        "internalType": "uint32"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postJumpAbs",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "posted",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "price",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "at",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "haltedUntil",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postedPrice",
-    "inputs": [
-      {
-        "name": "id",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "side",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "poster",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "posterAliveAt",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "posterEverSet",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -542,47 +327,6 @@ export const priceOracleAbi = [
         "name": "paused_",
         "type": "bool",
         "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setPostParams",
-    "inputs": [
-      {
-        "name": "maxPostAge_",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
-        "name": "maxPosterSilence_",
-        "type": "uint32",
-        "internalType": "uint32"
-      },
-      {
-        "name": "postJumpAbs_",
-        "type": "uint64",
-        "internalType": "uint64"
-      },
-      {
-        "name": "postCooldown_",
-        "type": "uint32",
-        "internalType": "uint32"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setPoster",
-    "inputs": [
-      {
-        "name": "poster_",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -893,107 +637,6 @@ export const priceOracleAbi = [
   },
   {
     "type": "event",
-    "name": "PostExpired",
-    "inputs": [
-      {
-        "name": "id",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PostParamsSet",
-    "inputs": [
-      {
-        "name": "maxPostAge",
-        "type": "uint32",
-        "indexed": false,
-        "internalType": "uint32"
-      },
-      {
-        "name": "maxPosterSilence",
-        "type": "uint32",
-        "indexed": false,
-        "internalType": "uint32"
-      },
-      {
-        "name": "postJumpAbs",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      },
-      {
-        "name": "postCooldown",
-        "type": "uint32",
-        "indexed": false,
-        "internalType": "uint32"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PosterProposed",
-    "inputs": [
-      {
-        "name": "poster",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "effectiveAt",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PosterSet",
-    "inputs": [
-      {
-        "name": "poster",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PricePosted",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "price",
-        "type": "uint64",
-        "indexed": false,
-        "internalType": "uint64"
-      },
-      {
-        "name": "halted",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "SettleCancelled",
     "inputs": [
       {
@@ -1139,17 +782,6 @@ export const priceOracleAbi = [
   },
   {
     "type": "error",
-    "name": "NoPostedPrice",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "NotYet",
     "inputs": [
       {
@@ -1171,11 +803,6 @@ export const priceOracleAbi = [
   },
   {
     "type": "error",
-    "name": "OnlyPoster",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -1193,49 +820,6 @@ export const priceOracleAbi = [
         "name": "account",
         "type": "address",
         "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PostHalted",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "until",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PostStale",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "at",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PosterSilent",
-    "inputs": [
-      {
-        "name": "aliveAt",
-        "type": "uint64",
-        "internalType": "uint64"
       }
     ]
   },
@@ -1343,6 +927,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "absorb",
     "inputs": [
       {
@@ -1434,6 +1031,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "cancel",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimHead",
     "inputs": [],
     "outputs": [
@@ -1471,8 +1081,66 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "defaultMaxUnbacked",
+    "name": "defaultMaxRisk",
     "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "delayed",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pAmount",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "amount",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "delayedShares",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "",
@@ -1613,7 +1281,7 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "maxUnbacked",
+    "name": "maxRisk",
     "inputs": [
       {
         "name": "positionId",
@@ -1632,7 +1300,7 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "maxUnbackedOverride",
+    "name": "maxRiskOverride",
     "inputs": [
       {
         "name": "positionId",
@@ -1759,64 +1427,6 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "mintPosted",
-    "inputs": [
-      {
-        "name": "pToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "usdgIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minOut",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "out",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "mintPostedOut",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "usdgIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "oracle",
     "inputs": [],
     "outputs": [
@@ -1830,7 +1440,20 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "outflowCapPerHour",
+    "name": "outflowFloatBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "outflowFloor",
     "inputs": [],
     "outputs": [
       {
@@ -2003,45 +1626,6 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "postedMaxPerBlock",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postedMaxTrade",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postedSpreadBps",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "proposeBridgeDeposit",
     "inputs": [
       {
@@ -2195,61 +1779,16 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "redeemPosted",
+    "name": "release",
     "inputs": [
       {
-        "name": "pToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "amountIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minOut",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "out",
+        "name": "ticket",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
+    "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "redeemPostedOut",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "amountIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2352,7 +1891,7 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "setMaxUnbacked",
+    "name": "setMaxRisk",
     "inputs": [
       {
         "name": "positionId",
@@ -2373,7 +1912,12 @@ export const pExchangeAbi = [
     "name": "setOutflowCap",
     "inputs": [
       {
-        "name": "outflowCapPerHour_",
+        "name": "floor",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "floatBps",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -2406,30 +1950,7 @@ export const pExchangeAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "defaultMaxUnbacked_",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setPostedParams",
-    "inputs": [
-      {
-        "name": "postedSpreadBps_",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "postedMaxTrade_",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "postedMaxPerBlock_",
+        "name": "defaultMaxRisk_",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -2645,6 +2166,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "event",
+    "name": "Cancelled",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ClaimPaid",
     "inputs": [
       {
@@ -2767,7 +2301,13 @@ export const pExchangeAbi = [
     "name": "OutflowCapSet",
     "inputs": [
       {
-        "name": "outflowCapPerHour",
+        "name": "floor",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "floatBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2861,32 +2401,7 @@ export const pExchangeAbi = [
         "internalType": "uint64"
       },
       {
-        "name": "defaultMaxUnbacked",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PostedParamsSet",
-    "inputs": [
-      {
-        "name": "postedSpreadBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "postedMaxTrade",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "postedMaxPerBlock",
+        "name": "defaultMaxRisk",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2958,6 +2473,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "event",
+    "name": "Released",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Rescued",
     "inputs": [
       {
@@ -3002,6 +2530,49 @@ export const pExchangeAbi = [
         "type": "address",
         "indexed": false,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SaleDelayed",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "pAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -3163,22 +2734,6 @@ export const pExchangeAbi = [
   },
   {
     "type": "error",
-    "name": "OutflowCap",
-    "inputs": [
-      {
-        "name": "wanted",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "remaining",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -3196,38 +2751,6 @@ export const pExchangeAbi = [
         "name": "account",
         "type": "address",
         "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PostedBlockCap",
-    "inputs": [
-      {
-        "name": "used",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "max",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PostedTradeTooLarge",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "max",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ]
   },
@@ -3281,6 +2804,22 @@ export const pExchangeAbi = [
   },
   {
     "type": "error",
+    "name": "RiskCap",
+    "inputs": [
+      {
+        "name": "risk",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cap",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "SafeCastOverflowedUintDowncast",
     "inputs": [
       {
@@ -3328,22 +2867,6 @@ export const pExchangeAbi = [
       },
       {
         "name": "minimum",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "UnbackedCap",
-    "inputs": [
-      {
-        "name": "unbacked",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cap",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -4861,45 +4384,6 @@ export const routerAbi = [
   },
   {
     "type": "function",
-    "name": "buyPosted",
-    "inputs": [
-      {
-        "name": "curve",
-        "type": "address",
-        "internalType": "contract BondingCurve"
-      },
-      {
-        "name": "usdgIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minCoins",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "coinsOut",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "pRefund",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "exchange",
     "inputs": [],
     "outputs": [
@@ -5026,7 +4510,7 @@ export const routerAbi = [
   },
   {
     "type": "function",
-    "name": "sellPosted",
+    "name": "sellForShares",
     "inputs": [
       {
         "name": "curve",
@@ -5039,7 +4523,7 @@ export const routerAbi = [
         "internalType": "uint256"
       },
       {
-        "name": "minUsdg",
+        "name": "minShares",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -5051,7 +4535,7 @@ export const routerAbi = [
     ],
     "outputs": [
       {
-        "name": "usdgOut",
+        "name": "pOut",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -5141,12 +4625,6 @@ export const routerAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
-      },
-      {
-        "name": "posted",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
       }
     ],
     "anonymous": false

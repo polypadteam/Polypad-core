@@ -93,21 +93,21 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         vm.prank(creator);
         vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, uint256(49_999)));
         factory.launch(ID, "a", "A", "", 0, lo, los);
-        (PriceOracle.Quote memory hi, bytes memory his) = _quote(ID, BUY, 950_000);
+        (PriceOracle.Quote memory hi, bytes memory his) = _quote(ID, BUY, 980_000);
         vm.prank(creator);
         factory.launch(ID, "a", "A", "", 0, hi, his);
-        (hi, his) = _quote(ID, BUY, 950_001);
+        (hi, his) = _quote(ID, BUY, 980_001);
         vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, uint256(950_001)));
+        vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, uint256(980_001)));
         factory.launch(ID, "a", "A", "", 0, hi, his);
         // A per-market ceiling lifts it for that market only.
         vm.prank(owner);
         exchange.setMaxPrice(ID, 990_000);
         vm.prank(creator);
         factory.launch(ID, "a", "A", "", 0, hi, his);
-        (hi, his) = _quote(ID_B, BUY, 950_001);
+        (hi, his) = _quote(ID_B, BUY, 980_001);
         vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, uint256(950_001)));
+        vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, uint256(980_001)));
         factory.launch(ID_B, "a", "A", "", 0, hi, his);
     }
 
@@ -321,7 +321,6 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         // Roles.
         assertEq(dO.signer(), dSigner);
         assertEq(dO.keeper(), dKeeper);
-        assertEq(dO.poster(), dKeeper);
         assertEq(dEx.keeper(), dKeeper);
         assertEq(dEx.factory(), address(dF));
         assertEq(dEx.bridgeDeposit(), dBridge);
@@ -357,12 +356,10 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         assertEq(address(dRt.usdg()), address(usdg));
         assertEq(address(dRt.poolManager()), address(poolManager));
         // Limits.
-        assertEq(dEx.outflowCapPerHour(), 1_000_000e6);
-        assertEq(dEx.postedSpreadBps(), 150);
-        // The posted path ships closed.
-        assertEq(dEx.postedMaxTrade(), 0);
-        assertEq(dEx.postedMaxPerBlock(), 0);
-        assertEq(dO.maxPostAge(), 900);
+        assertEq(dEx.outflowFloor(), 5_000e6);
+        assertEq(dEx.outflowFloatBps(), 5_000);
+        assertEq(dEx.maxPrice(), 980_000);
+        assertEq(dEx.defaultMaxRisk(), 1_000e6);
         assertFalse(dEx.halted());
     }
 
@@ -385,7 +382,7 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         vm.prank(creator);
         (, BondingCurve cv) = dF.launch(ID, "a", "A", "", 5_000, q, sig);
         vm.prank(dOwner);
-        dEx.setMaxUnbacked(ID, type(uint256).max);
+        dEx.setMaxRisk(ID, type(uint256).max);
         vm.startPrank(alice);
         usdg.approve(address(dRt), type(uint256).max);
         dRt.buy(cv, 7_000e6, 0, alice, q, sig);

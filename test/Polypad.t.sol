@@ -85,9 +85,6 @@ contract PolypadBase is Test {
         vault = new FeeVault(address(factory), exchange, address(poolManager));
         vm.startPrank(owner);
         exchange.setRoles(keeper, address(factory), bridge);
-        // The posted path ships closed (postedMaxTrade 0); these tests exercise it
-        // at its pre-v7 settings. PostedDefaultsTest checks it is closed by default.
-        exchange.setPostedParams(150, 500e6, 2_000e6);
         factory.setGraduator(graduator);
         factory.setFeeVault(vault);
         vm.stopPrank();
@@ -209,8 +206,8 @@ contract LaunchTest is PolypadBase {
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.QuoteExpired.selector, q.validUntil));
         factory.launch(ID, "No Hike", "NOHIKE", "ipfs://x", 0, q, sig);
 
-        _post(ID, 970_000);
-        vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, 970_000));
+        _post(ID, 985_000);
+        vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, 985_000));
         _launch(ID);
 
         _post(ID, 600_000);
@@ -237,7 +234,7 @@ contract TradeTest is PolypadBase {
         p = exchange.pTokenOf(ID);
         // Most tests here are about trading, not backing; the cap has its own test.
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
     }
 
     function test_buyMintsSharesAtQuotePlusSpread() public {
@@ -364,24 +361,57 @@ contract TradeTest is PolypadBase {
     }
 
     function test_mintRefusesOutsideBand() public {
-        _post(ID, 960_000);
+        _post(ID, 985_000);
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 960_000));
+        vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 985_000));
         router.buy(curve, 100e6, 0, alice, q, sig);
     }
 
-    function test_unbackedCapStopsMints() public {
+    function test_riskCapStopsMints() public {
+        // At 60c each unbacked share risks 40c: a $200 cap is 500 shares.
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, 500e6);
-        _buy(alice, curve, 290e6); // ~482 shares, under 500
+        exchange.setMaxRisk(ID, 200e6);
+        _buy(alice, curve, 290e6); // ~482 shares, ~$193 at risk
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
         vm.prank(alice);
-        vm.expectRevert();
-        router.buy(curve, 100e6, 0, alice, q, sig); // would pass 500 unbacked
+        vm.expectPartialRevert(PExchange.RiskCap.selector);
+        router.buy(curve, 100e6, 0, alice, q, sig); // ~648 shares, ~$259 at risk
 
         _back(ID, 482e6);
         _buy(alice, curve, 100e6);
+    }
+
+    /// The cap is in dollars at risk, (1 - price) a share: near-certain shares
+    /// can go unhedged in size, long shots cannot.
+    function test_riskCapScalesWithPrice() public {
+        assertEq(exchange.defaultMaxRisk(), 1_000e6);
+        vm.prank(alice);
+        usdg.approve(address(exchange), type(uint256).max);
+
+        // 97c: ~10,283 unbacked shares risk ~$308, under $1,000.
+        vm.prank(owner);
+        exchange.setMaxPrice(ID_B, 990_000);
+        vm.prank(owner);
+        exchange.ensurePToken(ID_B);
+        address pb = address(exchange.pTokenOf(ID_B));
+        _post(ID_B, 970_000);
+        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID_B, BUY);
+        vm.prank(alice);
+        uint256 got = exchange.mint(pb, 10_000e6, 0, alice, q, sig);
+        assertGt(got, 10_000e6);
+
+        // 5c: $60 buys ~1,197 shares risking ~$1,137, over $1,000.
+        vm.prank(owner);
+        exchange.setMaxRisk(ID_B, 0); // back to the default
+        _post(ID_B, 50_000);
+        _back(ID_B, got);
+        (q, sig) = signedQuote(ID_B, BUY);
+        vm.prank(alice);
+        vm.expectPartialRevert(PExchange.RiskCap.selector);
+        exchange.mint(pb, 60e6, 0, alice, q, sig);
+        vm.prank(alice);
+        exchange.mint(pb, 40e6, 0, alice, q, sig); // ~797 shares, ~$757
     }
 
     function test_settlementPaysPayoutLessSettleFee() public {

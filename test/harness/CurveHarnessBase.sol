@@ -67,15 +67,13 @@ abstract contract CurveHarnessBase is PolypadBase {
 
     address internal attacker = makeAddr("attacker");
     address internal victim = makeAddr("victim");
-    address internal poster = makeAddr("poster");
 
     function setUp() public virtual override {
         super.setUp();
         (coin, curve) = _launch(ID);
         p = exchange.pTokenOf(ID);
         vm.startPrank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
-        oracle.setPoster(poster);
+        exchange.setMaxRisk(ID, type(uint256).max);
         vm.stopPrank();
         swapper = new PoolSwapper(poolManager);
         // A float deep enough that no redemption here ever queues.
@@ -95,13 +93,9 @@ abstract contract CurveHarnessBase is PolypadBase {
         vm.stopPrank();
     }
 
+    /// @dev Move the price the pricer quotes.
     function _postOnChain(uint256 id, uint64 price) internal {
-        uint256[] memory ids = new uint256[](1);
-        uint64[] memory prices = new uint64[](1);
-        ids[0] = id;
-        prices[0] = price;
-        vm.prank(poster);
-        oracle.post(ids, prices);
+        px[id] = price;
     }
 
     /// @dev pToken for `who`, minted at the signed quote.

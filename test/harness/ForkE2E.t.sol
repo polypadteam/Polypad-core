@@ -16,7 +16,7 @@ contract ForkE2ETest is ForkBase {
         return PToken(p);
     }
 
-    function test_signedAndPostedMintRedeemOnRealUsdg() public {
+    function test_signedMintRedeemAndDelayedSaleOnRealUsdg() public {
         (Coin c,) = _launch(ID, 0);
         PToken p = _pOf(c);
 
@@ -35,21 +35,19 @@ contract ForkE2ETest is ForkBase {
         assertEq(out, exchange.redeemOut(600_000, shares / 2));
         assertEq(usdg.balanceOf(alice), before - 600e6 + out);
 
-        _postOnChain(ID, 600_000);
-        // Closed as deployed...
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PostedTradeTooLarge.selector, 100e6, 0));
-        exchange.mintPosted(address(p), 100e6, 0, alice);
-        // ...and working once the owner opens it.
+        // Over the hourly cap: the sale waits DELAY, then anyone releases it.
         vm.prank(owner);
-        exchange.setPostedParams(150, 5_000e6, 20_000e6);
-        vm.startPrank(alice);
-        uint256 posted = exchange.mintPosted(address(p), 100e6, 0, alice);
-        assertEq(posted, exchange.mintPostedOut(ID, 100e6));
-        uint256 back = exchange.redeemPosted(address(p), posted, 0, alice);
-        assertEq(back, exchange.redeemPostedOut(ID, posted));
-        vm.stopPrank();
-        assertLt(back, 100e6, "a posted round trip costs the spread");
+        exchange.setOutflowCap(0, 0);
+        uint256 rest = p.balanceOf(alice);
+        vm.prank(alice);
+        uint256 owed = exchange.redeem(address(p), rest, 0, alice, q, sig);
+        assertEq(usdg.balanceOf(alice), before - 600e6 + out, "nothing paid yet");
+        assertEq(exchange.delayedShares(ID), rest);
+        vm.warp(block.timestamp + exchange.DELAY());
+        exchange.release(0);
+        assertEq(usdg.balanceOf(alice), before - 600e6 + out + owed);
+        assertEq(exchange.delayedShares(ID), 0);
+        assertEq(p.balanceOf(address(exchange)), 0);
     }
 
     Coin internal gc;

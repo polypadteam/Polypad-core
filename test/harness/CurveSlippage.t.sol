@@ -89,33 +89,42 @@ contract CurveSlippageTest is CurveHarnessBase {
         _assertRouterEmpty();
     }
 
-    /* ------------------------------------------------------------ router, posted */
+    /* ------------------------------------------------------------ router, sell for shares */
 
-    function testFuzz_buyPostedMinCoinsBoundary(uint256 usdgIn) public {
-        usdgIn = bound(usdgIn, 1e6, exchange.postedMaxTrade());
-        uint256 expected = curve.quoteBuy(exchange.mintPostedOut(ID, usdgIn));
-        vm.prank(alice);
+    function testFuzz_sellForSharesMinSharesBoundaryOnCurve(uint256 usdgIn, uint256 frac) public {
+        usdgIn = bound(usdgIn, 2e6, 5_000e6);
+        (uint256 coins,) = _routerBuy(alice, usdgIn, 0);
+        coins = (coins * bound(frac, 1, 100)) / 100;
+        uint256 expected = curve.quoteSell(coins);
+        vm.assume(expected > 0);
+        uint256 before = p.balanceOf(alice);
+        vm.startPrank(alice);
+        coin.approve(address(router), coins);
         vm.expectRevert(abi.encodeWithSelector(Router.Slippage.selector, expected, expected + 1));
-        router.buyPosted(curve, usdgIn, expected + 1, alice);
-        vm.prank(alice);
-        (uint256 coins,) = router.buyPosted(curve, usdgIn, expected, alice);
-        assertEq(coins, expected);
+        router.sellForShares(curve, coins, expected + 1, alice);
+        uint256 out = router.sellForShares(curve, coins, expected, alice);
+        vm.stopPrank();
+        assertEq(out, expected);
+        assertEq(p.balanceOf(alice) - before, expected, "pToken paid to the seller");
         _assertRouterEmpty();
     }
 
-    function testFuzz_sellPostedMinUsdgBoundary(uint256 usdgIn, uint256 frac) public {
-        usdgIn = bound(usdgIn, 2e6, exchange.postedMaxTrade());
+    function testFuzz_sellForSharesMinSharesBoundaryInPool(uint256 usdgIn, uint256 frac) public {
+        _graduateDirect();
+        usdgIn = bound(usdgIn, 2e6, 20_000e6);
         (uint256 coins,) = _routerBuy(alice, usdgIn, 0);
         coins = (coins * bound(frac, 1, 100)) / 100;
-        uint256 expected = exchange.redeemPostedOut(ID, curve.quoteSell(coins));
+        uint256 expected = router.quotePool(curve, false, coins);
         vm.assume(expected > 0);
+        uint256 before = p.balanceOf(alice);
         vm.startPrank(alice);
         coin.approve(address(router), coins);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.Slippage.selector, expected, expected + 1));
-        router.sellPosted(curve, coins, expected + 1, alice);
-        uint256 out = router.sellPosted(curve, coins, expected, alice);
+        vm.expectRevert(abi.encodeWithSelector(Router.Slippage.selector, expected, expected + 1));
+        router.sellForShares(curve, coins, expected + 1, alice);
+        uint256 out = router.sellForShares(curve, coins, expected, alice);
         vm.stopPrank();
         assertEq(out, expected);
+        assertEq(p.balanceOf(alice) - before, expected);
         _assertRouterEmpty();
     }
 
@@ -176,34 +185,6 @@ contract CurveSlippageTest is CurveHarnessBase {
         (uint256 coins,) = _routerBuy(alice, usdgIn, expected);
         assertEq(coins, expected);
         assertEq(coin.balanceOf(alice), coins);
-        _assertRouterEmpty();
-    }
-
-    /// Same across graduation on the posted path (two buys fit under the per-trade cap only
-    /// if the curve is nearly sold out first).
-    function test_buyPostedAcrossGraduation() public {
-        // Leave less than one posted trade's worth on the curve.
-        uint256 target = curve.target();
-        uint256 pIn = _shares(bob, 7_000e6);
-        // Buy almost all: find a pIn leaving ~100 shares of raise.
-        uint256 need = target - curve.trackedQuote();
-        uint256 gross = ((need - 150e6) * 10_000) / (10_000 - curve.feeBps());
-        _curveBuy(bob, gross, 0);
-        assertFalse(curve.graduated());
-        pIn; // silence
-
-        uint256 snap = vm.snapshotState();
-        vm.prank(alice);
-        (uint256 expected,) = router.buyPosted(curve, 500e6, 0, alice);
-        assertTrue(curve.graduated());
-        vm.revertToState(snap);
-
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(Router.Slippage.selector, expected, expected + 1));
-        router.buyPosted(curve, 500e6, expected + 1, alice);
-        vm.prank(alice);
-        (uint256 coins,) = router.buyPosted(curve, 500e6, expected, alice);
-        assertEq(coins, expected);
         _assertRouterEmpty();
     }
 }

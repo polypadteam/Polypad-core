@@ -132,6 +132,30 @@ contract CurveRouterSafetyTest is CurveHarnessBase {
         assertEq(p.balanceOf(address(router)), 0);
     }
 
+    /// Same through `sellForShares`: a fake curve can hand out only pToken already
+    /// stray in the Router, never anyone's balance or approval.
+    function test_INFO_sellForSharesMovesOnlyStrayPToken() public {
+        uint256 stray = _shares(bob, 100e6);
+        vm.prank(bob);
+        p.transfer(address(router), stray);
+        uint256 aliceP = _shares(alice, 100e6);
+        vm.prank(alice);
+        p.approve(address(router), type(uint256).max);
+
+        FakeCurve fake = new FakeCurve(IERC20(address(p)), IERC20(address(junk)), router, attacker);
+        fake.setFakeOut(stray + 1);
+        vm.startPrank(attacker);
+        junk.approve(address(router), 2);
+        vm.expectRevert(); // more than the Router holds
+        router.sellForShares(BondingCurve(address(fake)), 1, 0, attacker);
+        fake.setFakeOut(stray);
+        router.sellForShares(BondingCurve(address(fake)), 1, 0, attacker);
+        vm.stopPrank();
+        assertEq(p.balanceOf(attacker), stray);
+        assertEq(p.balanceOf(alice), aliceP, "an approval to the Router is never spent");
+        assertEq(p.balanceOf(address(router)), 0);
+    }
+
     function test_callbacksOnlyFromThePoolManager() public {
         vm.expectRevert(Router.OnlyPoolManager.selector);
         router.unlockCallback("");
@@ -170,7 +194,11 @@ contract CurveRouterSafetyTest is CurveHarnessBase {
                 (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, SELL);
                 vm.startPrank(alice);
                 coin.approve(address(router), amt);
-                try router.sell(curve, amt, 0, alice, q, sig) {} catch {}
+                if (i % 4 == 1) {
+                    try router.sell(curve, amt, 0, alice, q, sig) {} catch {}
+                } else {
+                    try router.sellForShares(curve, amt, 0, alice) {} catch {}
+                }
                 vm.stopPrank();
             }
             _assertRouterEmpty();

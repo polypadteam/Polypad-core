@@ -32,7 +32,6 @@ contract Stray is ERC20 {
  */
 contract AccessMatrixTest is PolypadBase {
     address internal eve = makeAddr("eve");
-    address internal poster = makeAddr("poster");
     Coin internal coin;
     BondingCurve internal curve;
     PToken internal p;
@@ -41,8 +40,6 @@ contract AccessMatrixTest is PolypadBase {
         super.setUp();
         (coin, curve) = _launch(ID, 5_000);
         p = exchange.pTokenOf(ID);
-        vm.prank(owner);
-        oracle.setPoster(poster);
     }
 
     function _ids(uint256 id) internal pure returns (uint256[] memory a) {
@@ -75,12 +72,6 @@ contract AccessMatrixTest is PolypadBase {
         _notOwner(eve);
         oracle.setKeeper(eve);
         _notOwner(eve);
-        oracle.setPoster(eve);
-        _notOwner(eve);
-        oracle.acceptPoster();
-        _notOwner(eve);
-        oracle.setPostParams(900, 90, 30_000, 15);
-        _notOwner(eve);
         oracle.transferOwnership(eve);
         // Renouncing is disabled for everyone, owner included.
         vm.expectRevert(PriceOracle.BadParams.selector);
@@ -89,7 +80,6 @@ contract AccessMatrixTest is PolypadBase {
 
         vm.startPrank(owner);
         oracle.setKeeper(keeper);
-        oracle.setPostParams(900, 90, 30_000, 15);
         oracle.setSigner(eve);
         vm.warp(block.timestamp + oracle.ROLE_DELAY());
         oracle.acceptSigner();
@@ -116,39 +106,6 @@ contract AccessMatrixTest is PolypadBase {
         oracle.settle(ID, 1e6);
         vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         vm.stopPrank();
-    }
-
-    function test_oracle_posterOnly() public {
-        vm.startPrank(eve);
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.alive();
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.post(_ids(ID), _u64(600_000));
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.expire(_ids(ID));
-        vm.stopPrank();
-        // Neither the keeper nor the owner can post unless they are the poster.
-        vm.prank(keeper);
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.post(_ids(ID), _u64(600_000));
-        vm.prank(owner);
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.alive();
-
-        vm.startPrank(poster);
-        oracle.post(_ids(ID), _u64(600_000));
-        oracle.alive();
-        oracle.expire(_ids(ID));
-        vm.stopPrank();
-    }
-
-    function test_oracle_revokedPosterIsNobody() public {
-        vm.prank(owner);
-        oracle.setPoster(address(0));
-        // With no poster, address(0) "is" the poster, but nobody can call from it.
-        vm.prank(poster);
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.alive();
     }
 
     function test_oracle_ownershipIsTwoStep() public {
@@ -178,15 +135,15 @@ contract AccessMatrixTest is PolypadBase {
         _notOwner(eve);
         exchange.setParams(25, 25, 50_000, 950_000, 1);
         _notOwner(eve);
-        exchange.setMaxUnbacked(ID, 1);
+        exchange.setMaxRisk(ID, 1);
         _notOwner(eve);
         exchange.setMaxPrice(ID, 990_000);
         _notOwner(eve);
         exchange.setSettleFee(0);
         _notOwner(eve);
-        exchange.setPostedParams(0, 1, 1);
+        exchange.setOutflowCap(0, 0);
         _notOwner(eve);
-        exchange.setOutflowCap(0);
+        exchange.cancel(0);
         _notOwner(eve);
         exchange.resume();
         _notOwner(eve);
@@ -199,11 +156,10 @@ contract AccessMatrixTest is PolypadBase {
 
         vm.startPrank(owner);
         exchange.setParams(25, 25, 50_000, 950_000, 2_000e6);
-        exchange.setMaxUnbacked(ID, 1);
+        exchange.setMaxRisk(ID, 1);
         exchange.setMaxPrice(ID, 990_000);
         exchange.setSettleFee(50);
-        exchange.setPostedParams(150, 5_000e6, 20_000e6);
-        exchange.setOutflowCap(1_000_000e6);
+        exchange.setOutflowCap(1_000_000e6, 5_000);
         exchange.rescue(IERC20(address(stray)), owner, 1e18);
         exchange.halt();
         exchange.resume();
@@ -263,7 +219,61 @@ contract AccessMatrixTest is PolypadBase {
         assertEq(exchange.payQueue(10), 0);
         vm.expectRevert(PExchange.ZeroAmount.selector);
         exchange.withdrawUnclaimed(eve);
+        // No delayed sale yet: nothing to release.
+        vm.expectRevert();
+        exchange.release(0);
         vm.stopPrank();
+    }
+
+    /// A sale over the hourly cap waits: anyone releases it after DELAY (not while
+    /// halted), and only the owner can cancel one before that.
+    function test_exchange_releaseAnyoneCancelOwnerOnly() public {
+        vm.prank(owner);
+        exchange.setOutflowCap(0, 0); // every sale is over the cap
+        (PriceOracle.Quote memory bq, bytes memory bsig) = signedQuote(ID, BUY);
+        vm.startPrank(alice);
+        usdg.approve(address(exchange), type(uint256).max);
+        uint256 got = exchange.mint(address(p), 100e6, 0, alice, bq, bsig);
+        (PriceOracle.Quote memory sq, bytes memory ssig) = signedQuote(ID, SELL);
+        exchange.redeem(address(p), got / 2, 0, alice, sq, ssig);
+        exchange.redeem(address(p), got / 2, 0, alice, sq, ssig);
+        vm.stopPrank();
+        assertEq(exchange.delayedShares(ID), (got / 2) * 2);
+
+        vm.startPrank(eve);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.NotYet.selector, block.timestamp + exchange.DELAY()));
+        exchange.release(0);
+        _notOwner(eve);
+        exchange.cancel(0);
+        vm.stopPrank();
+        vm.prank(keeper);
+        _notOwner(keeper);
+        exchange.cancel(0);
+
+        vm.warp(block.timestamp + exchange.DELAY());
+        vm.prank(keeper);
+        exchange.halt();
+        vm.prank(eve);
+        vm.expectRevert(PExchange.Halted.selector);
+        exchange.release(0);
+        vm.prank(owner);
+        exchange.resume();
+
+        uint256 before = usdg.balanceOf(alice);
+        vm.prank(eve);
+        exchange.release(0);
+        assertGt(usdg.balanceOf(alice), before, "released to the seller, whoever calls");
+        vm.prank(eve);
+        vm.expectRevert(PExchange.NothingPending.selector);
+        exchange.release(0);
+
+        vm.prank(owner);
+        exchange.cancel(1);
+        assertEq(p.balanceOf(alice), got - (got / 2) * 2 + got / 2, "cancel gives the pToken back");
+        assertEq(exchange.delayedShares(ID), 0);
+        vm.prank(owner);
+        vm.expectRevert(PExchange.NothingPending.selector);
+        exchange.cancel(1);
     }
 
     /* ---------------------------------------------------------------- PToken */

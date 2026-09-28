@@ -19,7 +19,7 @@ contract FeeVaultTest is PolypadBase {
         vm.prank(carol);
         usdg.approve(address(router), type(uint256).max);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
     }
 
     function _pOf(Coin c) internal view returns (PToken) {

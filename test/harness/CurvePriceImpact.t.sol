@@ -120,8 +120,10 @@ contract CurvePriceImpactTest is CurveHarnessBase {
         cv.buy(pIn, 0, bob);
         vm.stopPrank();
         assertTrue(cv.graduated());
-        // Within 0.01%: the pool price is a rounded sqrt.
-        assertApproxEqRel(cv.spotPrice(), finalPrice, 1e14);
+        // Within 0.01%: the pool price is a rounded sqrt. At the tiniest prices
+        // (a high launch price, a few hundred wei per coin) that is one unit.
+        if (finalPrice < 1e6) assertApproxEqAbs(cv.spotPrice(), finalPrice, 1);
+        else assertApproxEqRel(cv.spotPrice(), finalPrice, 1e14);
         assertEq(graduator.poolKey(address(c)).fee, poolFee);
     }
 }

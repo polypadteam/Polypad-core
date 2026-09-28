@@ -9,7 +9,9 @@ contract ForkSmokeTest is ForkBase {
         assertEq(address(factory.graduator()), address(graduator));
         assertEq(address(factory.feeVault()), address(vault));
         assertEq(uint160(address(graduator)) & 0x3FFF, 0x2000, "hook flags");
-        assertEq(oracle.poster(), keeper);
+        assertEq(oracle.keeper(), keeper);
+        assertEq(exchange.outflowFloor(), 1_000_000e6);
+        assertEq(exchange.outflowFloatBps(), 5_000);
         assertEq(exchange.keeper(), keeper);
         assertEq(usdg.balanceOf(alice), 100_000e6);
     }

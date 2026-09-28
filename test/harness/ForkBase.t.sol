@@ -110,10 +110,7 @@ abstract contract ForkBase is Test {
         factory.setFeeVault(vault);
         router = new Router(usdg, exchange, poolManager);
         exchange.setRoles(keeper, address(factory), bridge);
-        exchange.setOutflowCap(1_000_000e6);
-        // As Deploy.s.sol: the posted path ships closed.
-        exchange.setPostedParams(150, 0, 0);
-        oracle.setPoster(keeper);
+        exchange.setOutflowCap(1_000_000e6, 5_000);
         vm.stopPrank();
     }
 
@@ -147,7 +144,7 @@ abstract contract ForkBase is Test {
         vm.prank(creator);
         (coin, curve) = factory.launch(id, "No Hike", "NOHIKE", "ipfs://x", holdersBps, q, sig);
         vm.prank(owner);
-        exchange.setMaxUnbacked(id, type(uint256).max);
+        exchange.setMaxRisk(id, type(uint256).max);
     }
 
     function _buy(address who, BondingCurve c, uint256 usdgIn) internal returns (uint256 coins, uint256 refund) {
@@ -164,13 +161,9 @@ abstract contract ForkBase is Test {
         vm.stopPrank();
     }
 
+    /// @dev Move the price the pricer quotes.
     function _postOnChain(uint256 id, uint64 price) internal {
-        uint256[] memory ids = new uint256[](1);
-        uint64[] memory prices = new uint64[](1);
-        ids[0] = id;
-        prices[0] = price;
-        vm.prank(keeper);
-        oracle.post(ids, prices);
+        px[id] = price;
     }
 
     /// @dev USDG's asset-protection and pause roles, granted by its default admin.

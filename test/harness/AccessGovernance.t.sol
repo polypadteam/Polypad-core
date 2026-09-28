@@ -18,14 +18,7 @@ import {PolypadBase} from "../Polypad.t.sol";
  */
 contract AccessGovernanceTest is PolypadBase {
     address internal eve = makeAddr("eve");
-    address internal poster = makeAddr("poster");
     address internal thief = makeAddr("thief");
-
-    function setUp() public override {
-        super.setUp();
-        vm.prank(owner);
-        oracle.setPoster(poster);
-    }
 
     /* ------------------------------------------------------- signer rotation */
 
@@ -74,46 +67,6 @@ contract AccessGovernanceTest is PolypadBase {
         vm.prank(owner);
         vm.expectRevert(PriceOracle.NothingPending.selector);
         oracle.acceptSigner();
-    }
-
-    /* ------------------------------------------------------- poster rotation */
-
-    function test_posterChangeDelayExactBoundary() public {
-        vm.prank(owner);
-        oracle.setPoster(eve);
-        assertEq(oracle.poster(), poster, "a change waits");
-        uint256 at = oracle.pendingPosterAt();
-        vm.warp(at - 1);
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.NotYet.selector, at));
-        oracle.acceptPoster();
-        vm.warp(at);
-        vm.prank(owner);
-        oracle.acceptPoster();
-        assertEq(oracle.poster(), eve);
-    }
-
-    /// Regression: a stolen owner key cannot get its own poster in before
-    /// ROLE_DELAY by revoking (instant) and then setting. Only the very first
-    /// poster is instant; after a revoke the poster stays 0 until the delay.
-    function test_posterDelayNotBypassedByRevokeThenSet() public {
-        assertTrue(oracle.posterEverSet());
-        vm.startPrank(owner);
-        oracle.setPoster(address(0));
-        oracle.setPoster(thief);
-        vm.stopPrank();
-        assertEq(oracle.poster(), address(0), "revoke is instant, the new poster is not");
-        assertEq(oracle.pendingPoster(), thief);
-        uint256 at = oracle.pendingPosterAt();
-        assertEq(at, block.timestamp + oracle.ROLE_DELAY());
-        vm.warp(at - 1);
-        vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.NotYet.selector, at));
-        oracle.acceptPoster();
-        vm.warp(at);
-        vm.prank(owner);
-        oracle.acceptPoster();
-        assertEq(oracle.poster(), thief);
     }
 
     /* --------------------------------------------------------- bridge deposit */
@@ -223,33 +176,14 @@ contract AccessGovernanceTest is PolypadBase {
         assertEq(exchange.maxPriceOf(ID), exchange.maxPrice());
     }
 
-    function test_settleFeeAndPostedSpreadBounds() public {
+    function test_settleFeeAndOutflowBounds() public {
         vm.startPrank(owner);
         exchange.setSettleFee(200);
         vm.expectRevert(PExchange.BadParams.selector);
         exchange.setSettleFee(201);
-        exchange.setPostedParams(1_000, 0, 0);
+        exchange.setOutflowCap(0, 10_000);
         vm.expectRevert(PExchange.BadParams.selector);
-        exchange.setPostedParams(1_001, 0, 0);
-        vm.stopPrank();
-    }
-
-    function test_postParamsBounds() public {
-        vm.startPrank(owner);
-        oracle.setPostParams(86_400, 600, 1, 3_600);
-        oracle.setPostParams(1, 1, type(uint64).max, 0);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(0, 90, 30_000, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(86_401, 90, 30_000, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(900, 0, 30_000, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(900, 601, 30_000, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(900, 90, 0, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(900, 90, 30_000, 3_601);
+        exchange.setOutflowCap(0, 10_001);
         vm.stopPrank();
     }
 
@@ -413,11 +347,22 @@ contract AccessGovernanceTest is PolypadBase {
 
     function test_outflowCapIsTheOnlyBrakeAndOwnerCanLiftItInstantly() public {
         vm.prank(owner);
-        exchange.setOutflowCap(type(uint256).max);
+        exchange.setOutflowCap(type(uint256).max, 0);
         assertEq(exchange.outflowRemaining(), type(uint256).max);
         vm.prank(owner);
-        exchange.setOutflowCap(0);
+        exchange.setOutflowCap(0, 0);
         assertEq(exchange.outflowRemaining(), 0);
+    }
+
+    /// The cap is the larger of the floor and a share of the float.
+    function test_outflowCapScalesWithTheFloatAboveTheFloor() public {
+        uint256 bal = usdg.balanceOf(address(exchange));
+        vm.prank(owner);
+        exchange.setOutflowCap(1_000e6, 5_000);
+        assertEq(exchange.outflowRemaining(), (bal * 5_000) / 10_000);
+        vm.prank(owner);
+        exchange.setOutflowCap(bal * 2, 5_000);
+        assertEq(exchange.outflowRemaining(), bal * 2, "the floor wins over a small float");
     }
 
     /// Regression: renouncing would leave a halted exchange unresumable forever,

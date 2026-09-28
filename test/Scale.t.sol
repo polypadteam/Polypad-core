@@ -28,7 +28,7 @@ contract ScaleTest is PolypadBase {
         (coin, curve) = _launch(ID);
         p = exchange.pTokenOf(ID);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
     }
 
     function _graduate() internal returns (uint256 coins) {
@@ -304,28 +304,29 @@ contract ScaleTest is PolypadBase {
         vm.prank(bob);
         (uint256 bobCoins,) = router.buy(curve, 1_000e6, 0, bob, none, "");
         assertGt(bobCoins, 0);
-        // And the posted path works for any terminal, with no posted price and no caps.
+        // Size is fine too: no band, no risk cap on a settled market.
         vm.prank(bob);
-        router.buyPosted(curve, 10_000e6, 0, bob);
+        router.buy(curve, 10_000e6, 0, bob, none, "");
         assertTrue(curve.graduated());
 
-        // Alice bought at 97c and is paid out at $1 less 0.5%.
-        uint256 out = _sellPostedAll(alice, coins);
+        // Alice bought at 97c and is paid out at $1 less 0.5%, with no quote.
+        uint256 out = _sellSettledAll(alice, coins);
         assertGt(out, 0);
     }
 
-    function _sellPostedAll(address who, uint256 coins) internal returns (uint256 out) {
+    function _sellSettledAll(address who, uint256 coins) internal returns (uint256 out) {
+        PriceOracle.Quote memory none;
         vm.startPrank(who);
         coin.approve(address(router), coins);
-        out = router.sellPosted(curve, coins, 0, who);
+        out = router.sell(curve, coins, 0, who, none, "");
         vm.stopPrank();
     }
 
     function test_maxPriceOverrideIsPerMarketAndCapped() public {
-        _post(ID, 970_000);
+        _post(ID, 985_000);
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 970_000));
+        vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 985_000));
         router.buy(curve, 100e6, 0, alice, q, sig);
 
         vm.startPrank(owner);
@@ -345,7 +346,7 @@ contract ScaleTest is PolypadBase {
     /// once the desk's cash comes back, everyone is paid.
     function test_burstOfBuysAndSellsNeverStrandsASeller() public {
         vm.prank(owner);
-        exchange.setOutflowCap(1_000_000e6);
+        exchange.setOutflowCap(1_000_000e6, 5_000);
         uint256 n = 300;
         address[] memory ts = new address[](n);
         uint256[] memory held = new uint256[](n);

@@ -45,6 +45,7 @@ contract Reenterer {
         PayQueue,
         WithdrawUnclaimed,
         Absorb,
+        Release,
         RevertAlways
     }
 
@@ -95,6 +96,8 @@ contract Reenterer {
             (ok, ret) = address(ex).call(abi.encodeCall(ex.withdrawUnclaimed, (address(this))));
         } else if (action == Action.Absorb) {
             (ok, ret) = address(ex).call(abi.encodeCall(ex.absorb, (address(p))));
+        } else if (action == Action.Release) {
+            (ok, ret) = address(ex).call(abi.encodeCall(ex.release, (0)));
         }
         blocked = !ok;
         reason = ret;
@@ -119,7 +122,7 @@ contract AdversarialReentrancyTest is PolypadBase {
         vm.startPrank(owner);
         ex.setRoles(keeper, address(factory), bridge);
         cp = ex.ensurePToken(ID);
-        ex.setMaxUnbacked(ID, type(uint256).max);
+        ex.setMaxRisk(ID, type(uint256).max);
         vm.stopPrank();
         r = new Reenterer(ex, cp);
         cb.mint(address(ex), 100_000e6);
@@ -233,6 +236,37 @@ contract AdversarialReentrancyTest is PolypadBase {
         assertTrue(r.attempted());
         assertFalse(r.blocked(), "absorb is open, and has nothing to burn");
         assertEq(cp.totalSupply(), supply - 1_000e6);
+    }
+
+    function test_reenteringRedeemFromAReleasePayoutIsBlocked() public {
+        vm.prank(owner);
+        ex.setOutflowCap(0, 0); // the whole sale is delayed
+        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, SELL);
+        r.redeem(1_000e6, q, sig);
+        assertEq(ex.delayedShares(ID), 1_000e6);
+        vm.warp(block.timestamp + ex.DELAY());
+        // A fresh quote for the re-entry, so only the guard can stop it.
+        (q, sig) = signedQuote(ID, SELL);
+        r.arm(Reenterer.Action.Redeem, q, sig);
+        ex.release(0);
+        _reentrancyBlocked();
+        assertEq(ex.delayedShares(ID), 0);
+    }
+
+    function test_reenteringReleaseFromARedeemPayoutIsBlocked() public {
+        vm.prank(owner);
+        ex.setOutflowCap(0, 0);
+        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, SELL);
+        r.redeem(1_000e6, q, sig);
+        vm.warp(block.timestamp + ex.DELAY());
+        vm.prank(owner);
+        ex.setOutflowCap(type(uint256).max, 0);
+        (q, sig) = signedQuote(ID, SELL);
+        r.arm(Reenterer.Action.Release, q, sig);
+        r.redeem(100e6, q, sig);
+        _reentrancyBlocked();
+        (address to,,,,) = ex.delayed(0);
+        assertEq(to, address(r), "still waiting: the nested release did not run");
     }
 
     /* ------------------------------------------------------------ signatures */
@@ -373,8 +407,6 @@ contract AdversarialReentrancyTest is PolypadBase {
         vm.expectRevert(abi.encodeWithSelector(PExchange.UnknownPToken.selector, alice));
         exchange.redeem(alice, 10e6, 0, alice, q, sig);
         vm.expectRevert(abi.encodeWithSelector(PExchange.UnknownPToken.selector, address(twin)));
-        exchange.mintPosted(address(twin), 10e6, 0, alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.UnknownPToken.selector, address(twin)));
         exchange.absorb(address(twin));
         vm.stopPrank();
     }
@@ -390,10 +422,6 @@ contract AdversarialReentrancyTest is PolypadBase {
         exchange.mint(address(p), 0, 0, alice, q, sig);
         vm.expectRevert(PExchange.ZeroAmount.selector);
         exchange.redeem(address(p), 0, 0, alice, q, sig);
-        vm.expectRevert(PExchange.ZeroAmount.selector);
-        exchange.mintPosted(address(p), 0, 0, alice);
-        vm.expectRevert(PExchange.ZeroAmount.selector);
-        exchange.redeemPosted(address(p), 0, 0, alice);
         vm.stopPrank();
         assertEq(exchange.payQueue(0), 0);
     }
@@ -434,8 +462,8 @@ contract AdversarialReentrancyTest is PolypadBase {
     function test_queuedClaimAboveUint96RevertsInsteadOfTruncating() public {
         vm.startPrank(owner);
         PToken p = exchange.ensurePToken(ID);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
-        exchange.setOutflowCap(type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
+        exchange.setOutflowCap(type(uint256).max, 0);
         vm.stopPrank();
         uint256 big = uint256(type(uint96).max) * 2;
         usdg.mint(alice, big);

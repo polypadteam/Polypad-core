@@ -21,9 +21,9 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 | `LaunchFactory` | Launches a coin: deploys the `Coin` (1B supply) and its `BondingCurve` |
 | `BondingCurve` | Constant-product curve over a virtual reserve; trades the coin against the market's pToken; fees fixed at launch (1.4% on the curve, 1% in the pool, half to the creator side) — see [docs/FEES.md](docs/FEES.md) |
 | `PToken` | One per Polymarket outcome: a 1:1 claim on a real share |
-| `PExchange` | USDG ⇄ pToken at a verified price; holds the float; caps unbacked supply per market and outflow per hour |
-| `PriceOracle` | Verifies signed quotes, holds posted prices, and each market's pause and settlement |
-| `Router` | One-transaction USDG buys and sells; emits one `Swap` per trade |
+| `PExchange` | USDG ⇄ pToken at a verified price; holds the float; caps the dollars at risk on unbacked supply per market, and meters outflow per hour (a sale past the cap is delayed, never refused) |
+| `PriceOracle` | Verifies signed quotes, and holds each market's pause and settlement |
+| `Router` | One-transaction USDG buys and sells, and sales of coins for shares (`sellForShares`); emits one `Swap` per trade |
 | `Graduator` | Moves a sold-out curve into a Uniswap v4 pool it owns forever (locked liquidity); the pools' only hook |
 | `FeeVault` | Receives the creator side of every fee: the creator's claimable balance, and an opt-in dividend streamed to the coin's holders |
 
@@ -32,12 +32,10 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 - **Signed quotes.** Polypad's pricer reads the live Polymarket order book and
   signs a price for one trade, valid for seconds. The quote rides in the user's
   own transaction and `PriceOracle.verify` checks it.
-- **Posted prices.** Polypad posts each market's midpoint on chain when it
-  moves, so any contract can trade with plain calls (`Router.buyPosted` /
-  `sellPosted`) at a wider spread and capped size. Posted prices are usable only
-  while the poster is alive, and a big jump halts them briefly. **Closed at
-  launch** (`postedMaxTrade = 0`): a one-step trade at a posted price can be
-  raced by anyone who sees Polymarket move first; it reopens with a two-step fill.
+- **No posted prices (v9).** The on-chain posted price of earlier versions
+  (closed since v7) is removed: a one-step trade at a posted price can be raced
+  by anyone who sees Polymarket move first. `Router.sellForShares` and trades
+  on a settled market need no quote.
 - **Settlement.** The keeper records each market's payout from Polymarket's
   on-chain result; it takes effect an hour later (`SETTLE_DELAY`), and the owner
   can cancel a wrong one meanwhile, so one hot key cannot settle a market at $1
@@ -45,11 +43,16 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 
 ### Safety
 
-- Unbacked pToken per market is capped until the desk reports the real shares.
-- USDG leaving through redemptions is capped per hour; the keeper can halt the
-  exchange, only the owner resumes it.
-- A new signer, poster or bridge address takes effect only after 2 days;
-  revoking the signer or poster is immediate.
+- Unbacked pToken per market is capped in dollars at risk (unbacked shares x
+  (1 − price), $1,000 by default) until the desk reports the real shares. Buys
+  are priced 5¢–98¢ (one market's ceiling can be lifted to 99¢).
+- USDG leaving through redemptions is metered per hour: the larger of $5,000
+  and 50% of the float as the hour began. The part of a sale over it is held
+  at its price and paid an hour later; the owner can cancel it meanwhile (the
+  pToken goes back). The keeper can halt the exchange (mints, redeems, releases
+  and queue payments), only the owner resumes it.
+- A new signer or bridge address takes effect only after 2 days; revoking the
+  signer is immediate.
 - `rescue` can never move the float or a pToken.
 - Selling always works while a market is live, including after buys pause before
   the end date. After resolution, pTokens pay the market's payout.

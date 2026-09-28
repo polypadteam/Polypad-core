@@ -11,7 +11,6 @@ import {MockUSDG, PolypadBase} from "./Polypad.t.sol";
 /// @dev What the owner can and cannot do, and how fast.
 contract GovernanceTest is PolypadBase {
     address internal newSigner = makeAddr("newSigner");
-    address internal poster = makeAddr("poster");
 
     function test_aNewSignerWaitsTwoDays() public {
         vm.prank(owner);
@@ -36,20 +35,6 @@ contract GovernanceTest is PolypadBase {
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
         vm.expectRevert(PriceOracle.BadSignature.selector);
         oracle.verify(q, sig, BUY);
-    }
-
-    function test_posterFirstSetIsImmediateChangesWait() public {
-        vm.startPrank(owner);
-        oracle.setPoster(poster);
-        assertEq(oracle.poster(), poster);
-        oracle.setPoster(newSigner);
-        assertEq(oracle.poster(), poster, "a change waits");
-        vm.warp(block.timestamp + 2 days);
-        oracle.acceptPoster();
-        assertEq(oracle.poster(), newSigner);
-        oracle.setPoster(address(0));
-        assertEq(oracle.poster(), address(0), "revoke is immediate");
-        vm.stopPrank();
     }
 
     function test_theBridgeDepositChangesOnlyWithDelay() public {

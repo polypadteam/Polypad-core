@@ -75,7 +75,7 @@ contract ForkGasTest is ForkBase {
 
         (, BondingCurve holder) = _launch(ID_B, 5_000);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID_B, type(uint256).max);
+        exchange.setMaxRisk(ID_B, type(uint256).max);
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID_B, BUY);
         vm.prank(alice);
         g = gasleft();
@@ -157,32 +157,6 @@ contract ForkGasTest is ForkBase {
         uint256 one = g - gasleft();
         console2.log("claimFor self as USDG", one);
         assertLt(one * 3 / 2 + 50_000, API_CLAIM);
-    }
-
-    function test_gasPost200Prices() public {
-        uint256[] memory ids = new uint256[](200);
-        uint64[] memory prices = new uint64[](200);
-        for (uint256 i; i < 200; ++i) {
-            ids[i] = 1_000 + i;
-            prices[i] = uint64(100_000 + i * 1_000);
-        }
-        vm.prank(keeper);
-        uint256 g = gasleft();
-        oracle.post(ids, prices);
-        uint256 cold = g - gasleft();
-        for (uint256 i; i < 200; ++i) prices[i] += 500;
-        vm.warp(block.timestamp + 60);
-        vm.prank(keeper);
-        g = gasleft();
-        oracle.post(ids, prices);
-        uint256 warm = g - gasleft();
-        vm.prank(keeper);
-        g = gasleft();
-        oracle.expire(ids);
-        uint256 exp = g - gasleft();
-        console2.log("post 200 (first)  ", cold);
-        console2.log("post 200 (update) ", warm);
-        console2.log("expire 200        ", exp);
     }
 
     function test_gasPayQueue100() public {

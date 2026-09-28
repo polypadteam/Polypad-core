@@ -70,7 +70,7 @@ contract CurveInvariants is PolypadBase {
         (coin, curve) = _launch(ID);
         p = exchange.pTokenOf(ID);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
 
         address[] memory traders = new address[](3);
         for (uint256 i; i < 3; ++i) {

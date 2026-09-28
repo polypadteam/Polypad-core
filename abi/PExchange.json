@@ -40,6 +40,19 @@
   },
   {
     "type": "function",
+    "name": "DELAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "absorb",
     "inputs": [
       {
@@ -131,6 +144,19 @@
   },
   {
     "type": "function",
+    "name": "cancel",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimHead",
     "inputs": [],
     "outputs": [
@@ -168,8 +194,66 @@
   },
   {
     "type": "function",
-    "name": "defaultMaxUnbacked",
+    "name": "defaultMaxRisk",
     "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "delayed",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pAmount",
+        "type": "uint128",
+        "internalType": "uint128"
+      },
+      {
+        "name": "amount",
+        "type": "uint128",
+        "internalType": "uint128"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "delayedShares",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "",
@@ -310,7 +394,7 @@
   },
   {
     "type": "function",
-    "name": "maxUnbacked",
+    "name": "maxRisk",
     "inputs": [
       {
         "name": "positionId",
@@ -329,7 +413,7 @@
   },
   {
     "type": "function",
-    "name": "maxUnbackedOverride",
+    "name": "maxRiskOverride",
     "inputs": [
       {
         "name": "positionId",
@@ -456,64 +540,6 @@
   },
   {
     "type": "function",
-    "name": "mintPosted",
-    "inputs": [
-      {
-        "name": "pToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "usdgIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minOut",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "out",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "mintPostedOut",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "usdgIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "oracle",
     "inputs": [],
     "outputs": [
@@ -527,7 +553,20 @@
   },
   {
     "type": "function",
-    "name": "outflowCapPerHour",
+    "name": "outflowFloatBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "outflowFloor",
     "inputs": [],
     "outputs": [
       {
@@ -700,45 +739,6 @@
   },
   {
     "type": "function",
-    "name": "postedMaxPerBlock",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postedMaxTrade",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "postedSpreadBps",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint16",
-        "internalType": "uint16"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "proposeBridgeDeposit",
     "inputs": [
       {
@@ -892,61 +892,16 @@
   },
   {
     "type": "function",
-    "name": "redeemPosted",
+    "name": "release",
     "inputs": [
       {
-        "name": "pToken",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "amountIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minOut",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "out",
+        "name": "ticket",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
+    "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "redeemPostedOut",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "amountIn",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1049,7 +1004,7 @@
   },
   {
     "type": "function",
-    "name": "setMaxUnbacked",
+    "name": "setMaxRisk",
     "inputs": [
       {
         "name": "positionId",
@@ -1070,7 +1025,12 @@
     "name": "setOutflowCap",
     "inputs": [
       {
-        "name": "outflowCapPerHour_",
+        "name": "floor",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "floatBps",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1103,30 +1063,7 @@
         "internalType": "uint64"
       },
       {
-        "name": "defaultMaxUnbacked_",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setPostedParams",
-    "inputs": [
-      {
-        "name": "postedSpreadBps_",
-        "type": "uint16",
-        "internalType": "uint16"
-      },
-      {
-        "name": "postedMaxTrade_",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "postedMaxPerBlock_",
+        "name": "defaultMaxRisk_",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1342,6 +1279,19 @@
   },
   {
     "type": "event",
+    "name": "Cancelled",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "ClaimPaid",
     "inputs": [
       {
@@ -1464,7 +1414,13 @@
     "name": "OutflowCapSet",
     "inputs": [
       {
-        "name": "outflowCapPerHour",
+        "name": "floor",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "floatBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1558,32 +1514,7 @@
         "internalType": "uint64"
       },
       {
-        "name": "defaultMaxUnbacked",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PostedParamsSet",
-    "inputs": [
-      {
-        "name": "postedSpreadBps",
-        "type": "uint16",
-        "indexed": false,
-        "internalType": "uint16"
-      },
-      {
-        "name": "postedMaxTrade",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "postedMaxPerBlock",
+        "name": "defaultMaxRisk",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1655,6 +1586,19 @@
   },
   {
     "type": "event",
+    "name": "Released",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Rescued",
     "inputs": [
       {
@@ -1699,6 +1643,49 @@
         "type": "address",
         "indexed": false,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SaleDelayed",
+    "inputs": [
+      {
+        "name": "ticket",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "pAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1860,22 +1847,6 @@
   },
   {
     "type": "error",
-    "name": "OutflowCap",
-    "inputs": [
-      {
-        "name": "wanted",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "remaining",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -1893,38 +1864,6 @@
         "name": "account",
         "type": "address",
         "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PostedBlockCap",
-    "inputs": [
-      {
-        "name": "used",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "max",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PostedTradeTooLarge",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "max",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ]
   },
@@ -1978,6 +1917,22 @@
   },
   {
     "type": "error",
+    "name": "RiskCap",
+    "inputs": [
+      {
+        "name": "risk",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cap",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "SafeCastOverflowedUintDowncast",
     "inputs": [
       {
@@ -2025,22 +1980,6 @@
       },
       {
         "name": "minimum",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "UnbackedCap",
-    "inputs": [
-      {
-        "name": "unbacked",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cap",
         "type": "uint256",
         "internalType": "uint256"
       }

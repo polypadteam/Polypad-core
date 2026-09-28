@@ -99,7 +99,7 @@ contract AdversarialVaultReentrancyTest is PolypadBase {
         ex.setRoles(keeper, address(f), bridge);
         f.setGraduator(g);
         f.setFeeVault(v);
-        ex.setMaxUnbacked(ID, type(uint256).max);
+        ex.setMaxRisk(ID, type(uint256).max);
         vm.stopPrank();
         cb.mint(address(ex), 100_000e6);
 

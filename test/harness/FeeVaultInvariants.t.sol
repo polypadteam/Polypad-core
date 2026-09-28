@@ -332,7 +332,7 @@ contract FeeVaultInvariants is PolypadBase {
     function setUp() public override {
         super.setUp();
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
         usdg.mint(address(exchange), 10_000_000e6);
         (coin, curve) = _launch(ID, 7_000);
         p = exchange.pTokenOf(ID);

@@ -56,7 +56,7 @@ contract AdversarialRouterGraduatorTest is PolypadBase {
         (coin, curve) = _launch(ID);
         p = exchange.pTokenOf(ID);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
         usdg.mint(eve, 10_000e6);
         vm.prank(eve);
         usdg.approve(address(router), type(uint256).max);

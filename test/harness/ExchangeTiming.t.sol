@@ -22,7 +22,6 @@ contract StrayToken is ERC20 {
  * Direct calls to the exchange (no curve), so every number is the exchange's own.
  */
 contract ExchangeTimingTest is PolypadBase {
-    address internal poster = makeAddr("poster");
     address internal carol = makeAddr("carol");
     PToken internal pA;
     PToken internal pB;
@@ -30,7 +29,6 @@ contract ExchangeTimingTest is PolypadBase {
     function setUp() public override {
         super.setUp();
         vm.startPrank(owner);
-        oracle.setPoster(poster);
         pA = exchange.ensurePToken(ID);
         pB = exchange.ensurePToken(ID_B);
         vm.stopPrank();
@@ -76,25 +74,9 @@ contract ExchangeTimingTest is PolypadBase {
         return exchange.redeem(p, amount, 0, who, q, sig);
     }
 
+    /// @dev Move the price the pricer quotes.
     function _postOnChain(uint256 id, uint64 price) internal {
-        uint256[] memory ids = new uint256[](1);
-        uint64[] memory prices = new uint64[](1);
-        ids[0] = id;
-        prices[0] = price;
-        vm.prank(poster);
-        oracle.post(ids, prices);
-    }
-
-    function _alive() internal {
-        vm.prank(poster);
-        oracle.alive();
-    }
-
-    function _expire(uint256 id) internal {
-        uint256[] memory ids = new uint256[](1);
-        ids[0] = id;
-        vm.prank(poster);
-        oracle.expire(ids);
+        _post(id, price);
     }
 
     function _settle(uint256 id, uint64 payout) internal {
@@ -268,40 +250,13 @@ contract ExchangeTimingTest is PolypadBase {
         vm.expectRevert();
         oracle.setSigner(alice);
         vm.expectRevert();
-        oracle.setPoster(alice);
-        vm.expectRevert();
         oracle.setKeeper(alice);
-        vm.expectRevert();
-        oracle.setPostParams(900, 90, 30_000, 15);
         vm.expectRevert(PriceOracle.OnlyKeeper.selector);
         oracle.settle(ID, 1e6);
         vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         vm.expectRevert(PriceOracle.OnlyKeeper.selector);
         oracle.setPaused(new uint256[](0), true);
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.alive();
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.post(new uint256[](0), new uint64[](0));
         vm.stopPrank();
-    }
-
-    /**
-     * Regression: a changed poster must wait ROLE_DELAY, so a stolen owner key
-     * cannot start posting prices at once. Revoking is immediate, and a set after
-     * a revoke no longer counts as the first set: it waits like any change.
-     */
-    function test_posterDelayNotBypassedByRevokeThenSet() public {
-        address evil = makeAddr("evil");
-        vm.startPrank(owner);
-        oracle.setPoster(address(0)); // revoke: immediate, fine
-        oracle.setPoster(evil); // waits ROLE_DELAY like any change
-        vm.stopPrank();
-        assertEq(oracle.poster(), address(0), "a new poster took effect without the delay");
-        assertEq(oracle.pendingPoster(), evil);
-        // With no poster the posted path is closed: nobody can post or ping.
-        vm.prank(evil);
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.alive();
     }
 
     /// Documented behaviour: a quote is a price, not a ticket. It may be used any
@@ -340,153 +295,14 @@ contract ExchangeTimingTest is PolypadBase {
         assertTrue(oracle.quoteDigest(q1) != oracle.quoteDigest(q2));
     }
 
-    /* =============================================== 2. posted path */
+    /* =============================================== 2. pause and settlement */
 
-    function test_postedPriceUsableThroughMaxPostAgeNotAfter() public {
-        uint256 t0 = block.timestamp;
-        uint256 age = oracle.maxPostAge();
-        for (uint256 t = 60; t < age; t += 60) {
-            vm.warp(t0 + t);
-            _alive();
-        }
-        vm.warp(t0 + age);
-        _alive();
-        assertEq(oracle.postedPrice(ID, BUY), 600_000);
-        vm.warp(t0 + age + 1);
-        _alive();
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PostStale.selector, ID, uint64(t0)));
-        oracle.postedPrice(ID, BUY);
-    }
-
-    function test_posterSilenceClosesEveryMarketAtTheBoundary() public {
-        uint64 aliveAt = oracle.posterAliveAt();
-        vm.warp(aliveAt + oracle.maxPosterSilence());
-        assertEq(oracle.postedPrice(ID, SELL), 600_000);
-        assertEq(oracle.postedPrice(ID_B, SELL), 300_000);
-        vm.warp(aliveAt + oracle.maxPosterSilence() + 1);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PosterSilent.selector, aliveAt));
-        oracle.postedPrice(ID, SELL);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PosterSilent.selector, aliveAt));
-        oracle.postedPrice(ID_B, SELL);
-        _alive();
-        assertEq(oracle.postedPrice(ID, SELL), 600_000);
-    }
-
-    function test_neverPostedMarketHasNoPostedPrice() public {
-        vm.prank(owner);
-        exchange.ensurePToken(0xC0C);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.NoPostedPrice.selector, 0xC0C));
-        oracle.postedPrice(0xC0C, BUY);
-    }
-
-    function test_jumpHaltBoundaries() public {
-        uint64 jump = oracle.postJumpAbs();
-        // One unit under the jump: no halt.
-        _postOnChain(ID, 600_000 + jump - 1);
-        assertEq(oracle.postedPrice(ID, BUY), 600_000 + jump - 1);
-        // Exactly the jump (measured from the last post): halted for postCooldown.
-        _postOnChain(ID, 600_000 + 2 * jump - 1);
-        (,, uint64 haltedUntil) = oracle.posted(ID);
-        assertEq(haltedUntil, block.timestamp + oracle.postCooldown());
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PostHalted.selector, ID, haltedUntil));
-        oracle.postedPrice(ID, SELL);
-        vm.warp(haltedUntil - 1);
-        _alive();
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PostHalted.selector, ID, haltedUntil));
-        oracle.postedPrice(ID, SELL);
-        vm.warp(haltedUntil);
-        _alive();
-        assertEq(oracle.postedPrice(ID, SELL), 600_000 + 2 * jump - 1);
-        // A jump on one market leaves the others alone.
-        assertEq(oracle.postedPrice(ID_B, SELL), 300_000);
-    }
-
-    function test_jumpDownHaltsToo() public {
-        _postOnChain(ID, 600_000 - oracle.postJumpAbs());
-        vm.expectRevert();
-        oracle.postedPrice(ID, BUY);
-    }
-
-    function test_postOutsideZeroOneIsRefusedWhole() public {
-        uint256[] memory ids = new uint256[](2);
-        uint64[] memory prices = new uint64[](2);
-        ids[0] = ID;
-        ids[1] = ID_B;
-        prices[0] = 610_000;
-        prices[1] = 1e6;
-        vm.prank(poster);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID_B, 1e6));
-        oracle.post(ids, prices);
-        (uint64 price,,) = oracle.posted(ID);
-        assertEq(price, 600_000, "the whole batch reverted");
-        prices = new uint64[](1);
-        vm.prank(poster);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.post(ids, prices);
-    }
-
-    function test_expireOnlyByThePosterAndOnlyLivePosts() public {
-        uint256[] memory ids = new uint256[](2);
-        ids[0] = ID;
-        ids[1] = 0xC0C; // never posted
-        vm.prank(alice);
-        vm.expectRevert(PriceOracle.OnlyPoster.selector);
-        oracle.expire(ids);
-
-        vm.recordLogs();
-        vm.prank(poster);
-        oracle.expire(ids);
-        assertEq(vm.getRecordedLogs().length, 1, "one PostExpired, none for the never-posted id");
-        (, uint64 atNever,) = oracle.posted(0xC0C);
-        assertEq(atNever, 0, "never-posted stays never-posted");
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.NoPostedPrice.selector, 0xC0C));
-        oracle.postedPrice(0xC0C, BUY);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PostStale.selector, ID, 1));
-        oracle.postedPrice(ID, BUY);
-
-        // Expiring again is a no-op.
-        vm.recordLogs();
-        vm.prank(poster);
-        oracle.expire(ids);
-        assertEq(vm.getRecordedLogs().length, 0);
-    }
-
-    function test_expiredMarketReopensOnTheNextPostAndStillJumpChecks() public {
-        _expire(ID);
-        // Same price: reopens at once.
-        _postOnChain(ID, 600_000);
-        assertEq(oracle.postedPrice(ID, BUY), 600_000);
-        // Expire, then repost far away: the jump is measured from the kept price.
-        _expire(ID);
-        _postOnChain(ID, 700_000);
-        vm.expectRevert();
-        oracle.postedPrice(ID, BUY);
-    }
-
-    function test_expiredMarketRefusesPostedTradesButNotSignedOnes() public {
-        uint256 shares = _mint(alice, ID, 100e6);
-        _expire(ID);
-        vm.startPrank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PostStale.selector, ID, 1));
-        exchange.mintPosted(address(pA), 10e6, 0, alice);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PostStale.selector, ID, 1));
-        exchange.redeemPosted(address(pA), shares, 0, alice);
-        vm.stopPrank();
-        assertGt(_redeem(alice, ID, shares), 0);
-    }
-
-    function test_pausedMarketClosesPostedBothWaysSignedSellsOnly() public {
+    function test_pausedMarketStopsBuysNotSells() public {
         uint256 shares = _mint(alice, ID, 100e6);
         uint256[] memory ids = new uint256[](1);
         ids[0] = ID;
         vm.prank(keeper);
         oracle.setPaused(ids, true);
-        vm.startPrank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.MarketPaused.selector, ID));
-        exchange.mintPosted(address(pA), 10e6, 0, alice);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.MarketPaused.selector, ID));
-        exchange.redeemPosted(address(pA), shares, 0, alice);
-        vm.stopPrank();
         (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, BUY);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.MarketPaused.selector, ID));
@@ -495,32 +311,27 @@ contract ExchangeTimingTest is PolypadBase {
         // Unpause reopens everything.
         vm.prank(keeper);
         oracle.setPaused(ids, false);
-        vm.prank(alice);
-        exchange.redeemPosted(address(pA), shares / 4, 0, alice);
+        assertGt(_mint(alice, ID, 10e6), 0);
     }
 
-    function test_settledMarketTradesAtPayoutOnBothPathsQuotesIgnored() public {
+    function test_settledMarketTradesAtPayoutQuotesIgnored() public {
         uint256 shares = _mint(alice, ID, 1_000e6);
         _settle(ID, 1e6);
-        // The settle delay aged the post out; a fresh one isolates the settled check.
-        _postOnChain(ID, 600_000);
-        // postedPrice itself refuses a settled market...
+        // A live quote is refused on a settled market...
+        (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, SELL);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.MarketSettled.selector, ID));
-        oracle.postedPrice(ID, SELL);
-        // ...but the exchange routes settled redemptions to the payout.
+        oracle.verify(q, sig, SELL);
+        // ...but the exchange routes settled redemptions to the payout, quote ignored.
+        PriceOracle.Quote memory junk;
         uint256 before = usdg.balanceOf(alice);
         vm.prank(alice);
-        uint256 out = exchange.redeemPosted(address(pA), shares / 2, 0, alice);
+        uint256 out = exchange.redeem(address(pA), shares / 2, 0, alice, junk, "");
         assertEq(out, ((shares / 2) * ((1e6 * uint256(10_000 - exchange.settleFeeBps())) / 10_000)) / 1e6);
         assertEq(usdg.balanceOf(alice) - before, out);
-        // Signed redeem with a garbage quote: ignored, payout used.
-        PriceOracle.Quote memory junk;
         vm.prank(alice);
-        uint256 out2 = exchange.redeem(address(pA), shares / 2, 0, alice, junk, "");
+        uint256 out2 = exchange.redeem(address(pA), shares / 2, 0, alice, q, sig);
         assertEq(out2, out);
-        // Settled mints skip the posted caps and the quote.
-        vm.prank(alice);
-        exchange.mintPosted(address(pA), 5_000e6, 0, alice);
+        // Settled mints need no quote either.
         vm.prank(alice);
         exchange.mint(address(pA), 5_000e6, 0, alice, junk, "");
     }
@@ -538,211 +349,198 @@ contract ExchangeTimingTest is PolypadBase {
         vm.stopPrank();
     }
 
-    function test_postedTradeCapIsInclusive() public {
-        uint256 max = exchange.postedMaxTrade();
-        vm.startPrank(alice);
-        exchange.mintPosted(address(pA), max, 0, alice);
-        vm.roll(block.number + 1);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PostedTradeTooLarge.selector, max + 1, max));
-        exchange.mintPosted(address(pA), max + 1, 0, alice);
-        vm.stopPrank();
-    }
-
-    function test_postedRedeemCapIsMeasuredInUsdgOut() public {
-        uint256 shares = _mint(alice, ID, 5_000e6);
-        uint256 max = exchange.postedMaxTrade();
-        // Shares worth just over the cap at the posted sell price.
-        uint256 sellPx = (uint256(600_000) * (10_000 - exchange.postedSpreadBps())) / 10_000;
-        uint256 over = ((max + 1) * 1e6 + sellPx - 1) / sellPx;
-        assertLt(over, shares);
-        vm.prank(alice);
-        vm.expectRevert(); // PostedTradeTooLarge
-        exchange.redeemPosted(address(pA), over, 0, alice);
-        vm.prank(alice);
-        exchange.redeemPosted(address(pA), over - 2, 0, alice);
-    }
-
-    function test_postedBlockCapCountsMintsAndRedeemsTogetherPerMarket() public {
-        uint256 shares = _mint(alice, ID, 3_000e6);
-        uint256 perBlock = exchange.postedMaxPerBlock();
-        vm.roll(block.number + 1);
-        vm.startPrank(alice);
-        exchange.mintPosted(address(pA), 500e6, 0, alice);
-        exchange.mintPosted(address(pA), 500e6, 0, alice);
-        uint256 out = exchange.redeemPosted(address(pA), (shares * 400) / 3_000, 0, alice);
-        uint256 used = 1_000e6 + out;
-        uint256 left = perBlock - used;
-        exchange.mintPosted(address(pA), left / 2, 0, alice);
-        exchange.mintPosted(address(pA), left - left / 2, 0, alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PostedBlockCap.selector, perBlock + 1, perBlock));
-        exchange.mintPosted(address(pA), 1, 0, alice);
-        // A sell counts against the same bucket.
-        vm.expectRevert();
-        exchange.redeemPosted(address(pA), 10e6, 0, alice);
-        // Another market has its own bucket.
-        exchange.mintPosted(address(pB), 500e6, 0, alice);
-        vm.stopPrank();
-        // Next block: fresh bucket.
-        vm.roll(block.number + 1);
-        vm.prank(alice);
-        exchange.mintPosted(address(pA), 500e6, 0, alice);
-    }
-
-    function test_postedBlockCapIsPerBlockNotPerTimestamp() public {
-        vm.startPrank(alice);
-        for (uint256 i; i < 4; ++i) {
-            exchange.mintPosted(address(pA), 500e6, 0, alice);
-        }
-        // Time moves, block does not: still capped.
-        vm.warp(block.timestamp + 60);
-        vm.stopPrank();
-        _alive();
-        vm.prank(alice);
-        vm.expectRevert();
-        exchange.mintPosted(address(pA), 1e6, 0, alice);
-    }
-
-    function test_postedMintRespectsTheBand() public {
-        _postOnChain(ID_B, 300_000 - 29_000);
-        vm.warp(block.timestamp + 1);
-        _alive();
-        // Walk ID_B's post down under 5c in sub-jump steps.
-        uint64 p = 271_000;
-        while (p > 60_000) {
-            p -= 29_000;
-            _postOnChain(ID_B, p);
-        }
-        _postOnChain(ID_B, 49_999);
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 49_999));
-        exchange.mintPosted(address(pB), 10e6, 0, alice);
-    }
-
-    /**
-     * KNOWN, and why the posted path ships closed (postedMaxTrade = 0). Its
-     * defence against the lag between a Polymarket move and the next post is the
-     * jump halt. But the halt starts only once the new post lands, and blocks
-     * trading only during the cooldown: a trader who bought at the stale price
-     * before the post simply waits the cooldown out and sells at the new one.
-     * Here, with the path opened at its old settings: 60c -> 70c, $2,000 in (one
-     * block's cap), ~13% profit out of the float. Only a two-step fill closes it.
-     */
-    function test_KNOWN_postedLatencyArbProfitsAcrossAJump() public {
-        uint256 before = usdg.balanceOf(alice);
-        // Polymarket has already moved to 70c; the keeper's post is in flight.
-        vm.startPrank(alice);
-        uint256 shares;
-        for (uint256 i; i < 4; ++i) {
-            shares += exchange.mintPosted(address(pA), 500e6, 0, alice);
-        }
-        vm.stopPrank();
-        _postOnChain(ID, 700_000); // halts 15s
-        vm.warp(block.timestamp + oracle.postCooldown());
-        vm.roll(block.number + 1);
-        _alive();
-        vm.startPrank(alice);
-        uint256 chunk = shares / 5;
-        for (uint256 i; i < 5; ++i) {
-            if (i == 4) chunk = pA.balanceOf(alice);
-            exchange.redeemPosted(address(pA), chunk, 0, alice);
-            vm.roll(block.number + 1);
-        }
-        vm.stopPrank();
-        assertGt(usdg.balanceOf(alice), before, "the leak the closed default guards against");
-    }
-
-    /// KNOWN, same leak without a jump: at low prices a sub-halt move is many
-    /// times the 1.5% posted spread. 10c -> 12.9c is under the 3c halt, so not
-    /// even halted. Another reason the posted path ships closed.
-    function test_KNOWN_postedLatencyArbAtLowPricesUnderTheJumpThreshold() public {
-        vm.prank(owner);
-        exchange.setMaxUnbacked(ID_B, 1_000_000e6);
-        // Walk ID_B to 10c in sub-jump steps.
-        uint64[7] memory path = [uint64(271_000), 242_000, 213_000, 184_000, 155_000, 126_000, 100_000];
-        for (uint256 i; i < path.length; ++i) {
-            _postOnChain(ID_B, path[i]);
-        }
-        uint256 before = usdg.balanceOf(alice);
-        vm.prank(alice);
-        uint256 shares = exchange.mintPosted(address(pB), 500e6, 0, alice);
-        _postOnChain(ID_B, 129_000); // +2.9c: 29% move, no halt
-        vm.roll(block.number + 1);
-        vm.startPrank(alice);
-        exchange.redeemPosted(address(pB), shares / 2, 0, alice);
-        vm.roll(block.number + 1);
-        exchange.redeemPosted(address(pB), pB.balanceOf(alice), 0, alice);
-        vm.stopPrank();
-        assertGt(usdg.balanceOf(alice), before, "the leak the closed default guards against");
-    }
-
-    /// With the shipped settings (postedMaxTrade = postedMaxPerBlock = 0) neither
-    /// leg of the latency arb is possible: every posted mint and redeem reverts,
-    /// while signed quotes and settled payouts work as before.
-    function test_postedLatencyArbImpossibleWithTheDefaultConfig() public {
-        vm.prank(owner);
-        exchange.setPostedParams(150, 0, 0);
-        uint256 shares = _mint(alice, ID, 1_000e6);
-        vm.startPrank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PostedTradeTooLarge.selector, 500e6, 0));
-        exchange.mintPosted(address(pA), 500e6, 0, alice);
-        uint256 out = exchange.redeemPostedOut(ID, shares);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PostedTradeTooLarge.selector, out, 0));
-        exchange.redeemPosted(address(pA), shares, 0, alice);
-        vm.stopPrank();
-        _postOnChain(ID, 700_000);
-        vm.warp(block.timestamp + oracle.postCooldown());
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PostedTradeTooLarge.selector, 1e6, 0));
-        exchange.mintPosted(address(pA), 1e6, 0, alice);
-        assertGt(_redeem(alice, ID, shares), 0);
-    }
-
     /* =============================================== 3. outflow cap */
 
     function _toLastSecondOfHour() internal {
         uint256 t = (block.timestamp / 3_600 + 1) * 3_600 - 1;
         vm.warp(t);
-        _alive();
+    }
+
+    /// A fixed hourly cap: `floor` with no share of the float.
+    function _fixedCap(uint256 cap) internal {
+        vm.prank(owner);
+        exchange.setOutflowCap(cap, 0);
+    }
+
+    function _delayed(uint256 ticket)
+        internal
+        view
+        returns (address to, uint64 readyAt, uint256 id, uint256 pAmount, uint256 amount)
+    {
+        (to, readyAt, id, pAmount, amount) = exchange.delayed(ticket);
     }
 
     function test_outflowCapExactFillThenHourRollover() public {
         uint256 shares = _mint(alice, ID, 10_000e6);
         uint256 amount = shares / 4;
         uint256 out = exchange.redeemOut(600_000, amount);
-        vm.prank(owner);
-        exchange.setOutflowCap(out * 2);
+        _fixedCap(out * 2);
         _toLastSecondOfHour();
         _redeem(alice, ID, amount);
         _redeem(alice, ID, amount); // exactly fills the hour
         assertEq(exchange.outflowRemaining(), 0);
-        (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, SELL);
-        vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.OutflowCap.selector, exchange.redeemOut(600_000, 1e6), 0));
-        exchange.redeem(address(pA), 1e6, 0, alice, q, sig);
-        // v8: a sliding hour. One second later is a new clock hour, but the last
-        // one still counts in full: no fresh cap at the boundary.
+        // v9: past the cap a sale is not refused. All of it waits.
+        uint256 before = usdg.balanceOf(alice);
+        uint256 over = _redeem(alice, ID, 1e6);
+        assertEq(over, exchange.redeemOut(600_000, 1e6));
+        assertEq(usdg.balanceOf(alice), before, "an over-cap sale was paid at once");
+        (address to, uint64 readyAt, uint256 id, uint256 pAmount, uint256 owed) = _delayed(0);
+        assertEq(to, alice);
+        assertEq(readyAt, block.timestamp + exchange.DELAY());
+        assertEq(id, ID);
+        assertEq(pAmount, 1e6);
+        assertEq(owed, over);
+        assertEq(exchange.delayedShares(ID), 1e6);
+        assertEq(pA.balanceOf(address(exchange)), 1e6);
+        // A sliding hour. One second later is a new clock hour, but the last one
+        // still counts in full: no fresh cap at the boundary.
         vm.warp(block.timestamp + 1);
         assertEq(exchange.outflowRemaining(), 0);
-        (q, sig) = _qNow(ID, SELL);
-        vm.prank(alice);
-        vm.expectRevert();
-        exchange.redeem(address(pA), amount, 0, alice, q, sig);
         // It frees linearly: half the cap half an hour on, all of it an hour on.
         vm.warp(block.timestamp + 1_800);
         assertApproxEqAbs(exchange.outflowRemaining(), out, 1);
         vm.warp(block.timestamp + 1_800);
         assertEq(exchange.outflowRemaining(), out * 2);
-        _alive();
+        before = usdg.balanceOf(alice);
         _redeem(alice, ID, amount);
+        assertEq(usdg.balanceOf(alice) - before, out, "a sale under the cap was not paid in full");
+    }
+
+    function test_saleOverTheCapIsSplitAtItsPrice() public {
+        uint256 shares = _mint(alice, ID, 10_000e6);
+        _fixedCap(1_000e6);
+        uint256 before = usdg.balanceOf(alice);
+        uint256 out = _redeem(alice, ID, shares);
+        assertEq(out, exchange.redeemOut(600_000, shares));
+        // The cap's worth is paid now; the rest, and the pToken for it, wait.
+        assertEq(usdg.balanceOf(alice) - before, 1_000e6);
+        (,,, uint256 pAmount, uint256 owed) = _delayed(0);
+        assertEq(owed, out - 1_000e6);
+        assertEq(pAmount, (shares * (out - 1_000e6)) / out);
+        assertEq(pA.totalSupply(), pAmount, "the paid part's pToken was not burned");
+        assertEq(pA.balanceOf(alice), 0);
+        // The price is fixed: a move before release changes nothing.
+        _postOnChain(ID, 100_000);
+        vm.warp(block.timestamp + exchange.DELAY());
+        before = usdg.balanceOf(alice);
+        vm.prank(carol); // anyone may release
+        exchange.release(0);
+        assertEq(usdg.balanceOf(alice) - before, owed);
+        assertEq(pA.totalSupply(), 0);
+        assertEq(exchange.delayedShares(ID), 0);
+    }
+
+    function test_releaseWaitsTheDelayOnceOnlyAndNotWhileHalted() public {
+        uint256 shares = _mint(alice, ID, 1_000e6);
+        _fixedCap(1);
+        _redeem(alice, ID, shares);
+        (, uint64 readyAt,,,) = _delayed(0);
+        vm.warp(readyAt - 1);
+        vm.expectRevert(abi.encodeWithSelector(PExchange.NotYet.selector, readyAt));
+        exchange.release(0);
+        vm.warp(readyAt);
+        vm.prank(keeper);
+        exchange.halt();
+        vm.expectRevert(PExchange.Halted.selector);
+        exchange.release(0);
+        vm.prank(owner);
+        exchange.resume();
+        exchange.release(0);
+        vm.expectRevert(PExchange.NothingPending.selector);
+        exchange.release(0);
+        vm.prank(owner);
+        vm.expectRevert(PExchange.NothingPending.selector);
+        exchange.cancel(0);
+        vm.expectRevert();
+        exchange.release(1); // never existed
+    }
+
+    function test_releaseQueuesWhatTheFloatCannotPay() public {
+        uint256 shares = _mint(alice, ID, 1_000e6);
+        _fixedCap(1);
+        uint256 out = _redeem(alice, ID, shares);
+        _drainFloat();
+        vm.warp(block.timestamp + exchange.DELAY());
+        exchange.release(0);
+        (, uint64 readyAt,,,) = _delayed(0);
+        assertEq(readyAt, 0, "a released sale is still on the books");
+        // Paid in turn like any sale the float could not cover.
+        assertEq(exchange.queued(), out - 1);
+    }
+
+    function test_ownerCancelGivesThePTokenBack() public {
+        uint256 shares = _mint(alice, ID, 1_000e6);
+        _fixedCap(1);
+        uint256 before = usdg.balanceOf(alice);
+        _redeem(alice, ID, shares);
+        (,,, uint256 pAmount,) = _delayed(0);
+        vm.prank(alice);
+        vm.expectRevert();
+        exchange.cancel(0);
+        vm.prank(keeper);
+        vm.expectRevert();
+        exchange.cancel(0);
+        // Cancelling works while halted: that is when it is needed.
+        vm.prank(keeper);
+        exchange.halt();
+        vm.prank(owner);
+        exchange.cancel(0);
+        assertEq(pA.balanceOf(alice), pAmount);
+        assertEq(usdg.balanceOf(alice) - before, 1, "only the 1-wei cap was paid");
+        assertEq(exchange.delayedShares(ID), 0);
+        vm.warp(block.timestamp + exchange.DELAY());
+        vm.prank(owner);
+        exchange.resume();
+        vm.expectRevert(PExchange.NothingPending.selector);
+        exchange.release(0);
+    }
+
+    function test_absorbLeavesDelayedSharesAlone() public {
+        uint256 shares = _mint(alice, ID, 1_000e6);
+        _fixedCap(1);
+        _redeem(alice, ID, shares);
+        (,,, uint256 pAmount,) = _delayed(0);
+        assertEq(exchange.absorb(address(pA)), 0);
+        // A fee sent here is absorbed; the delayed sale's pToken stays.
+        uint256 fee = _mint(bob, ID, 10e6);
+        vm.prank(bob);
+        pA.transfer(address(exchange), fee);
+        assertEq(exchange.absorb(address(pA)), fee);
+        assertEq(pA.balanceOf(address(exchange)), pAmount);
+        vm.warp(block.timestamp + exchange.DELAY());
+        exchange.release(0);
+    }
+
+    function test_capScalesWithTheFloatAndNeverBelowTheFloor() public {
+        vm.prank(owner);
+        exchange.setOutflowCap(1_000e6, 5_000);
+        // Before the hour's first trade the cap follows the free float.
+        uint256 free = exchange.freeFloat();
+        assertEq(exchange.outflowRemaining(), (free * 5_000) / 10_000);
+        // The hour's first trade fixes it at the float before that trade: a mint
+        // does not raise it, and paying out does not shrink it.
+        uint256 shares = _mint(alice, ID, 10_000e6);
+        assertEq(exchange.outflowRemaining(), (free * 5_000) / 10_000);
+        uint256 out = _redeem(alice, ID, shares / 2);
+        assertEq(exchange.outflowRemaining(), (free * 5_000) / 10_000 - out);
+        // The desk taking the float shrinks the next hours' cap, down to the floor.
+        _drainFloat();
+        vm.warp(block.timestamp + 2 hours);
+        assertEq(exchange.freeFloat(), 0);
+        assertEq(exchange.outflowRemaining(), 1_000e6);
+        vm.prank(owner);
+        vm.expectRevert(PExchange.BadParams.selector);
+        exchange.setOutflowCap(0, 100_001);
+        vm.prank(alice);
+        vm.expectRevert();
+        exchange.setOutflowCap(0, 0);
     }
 
     function test_slidingOutflowWindowMath() public {
-        uint256 shares = _mint(alice, ID, 10_000e6);
-        vm.prank(owner);
-        exchange.setOutflowCap(1_000e6);
+        _mint(alice, ID, 10_000e6);
+        _fixedCap(1_000e6);
         // Start of an hour, then use 600 of the cap at minute 10.
         vm.warp((block.timestamp / 3_600 + 1) * 3_600 + 600);
-        _alive();
         uint256 used;
         while (used < 600e6) used += _redeem(alice, ID, 10e6);
         uint256 cap = 1_000e6;
@@ -761,63 +559,91 @@ contract ExchangeTimingTest is PolypadBase {
         // Two hours on, the old hour is gone.
         vm.warp(hourStart + 3_600);
         assertEq(exchange.outflowRemaining(), cap);
-        shares;
     }
 
-    function test_outflowCapCountsSignedPostedSettledAndQueuedAlike() public {
+    function test_outflowCapCountsSignedSettledAndQueuedAlike() public {
         uint256 shares = _mint(alice, ID, 4_000e6);
         uint256 sharesB = _mint(alice, ID_B, 1_000e6);
-        vm.prank(owner);
-        exchange.setOutflowCap(1_000_000e6);
+        _fixedCap(1_000_000e6);
         uint256 used0 = 1_000_000e6 - exchange.outflowRemaining();
         uint256 a = _redeem(alice, ID, shares / 4);
-        vm.prank(alice);
-        uint256 b = exchange.redeemPosted(address(pA), shares / 8, 0, alice);
         _drainFloat();
         uint256 c = _redeem(alice, ID, shares / 4); // queued entirely
         assertEq(exchange.queued(), c);
-        assertEq(1_000_000e6 - exchange.outflowRemaining() - used0, a + b + c);
+        assertEq(1_000_000e6 - exchange.outflowRemaining() - used0, a + c);
         // A settlement takes SETTLE_DELAY, which rolls into a later clock hour:
         // the settled redemption is the only outflow of that hour.
         _settle(ID_B, 1e6);
-        // v8: the sliding hour still sees part of the earlier one; an hour more clears it.
+        // The sliding hour still sees part of the earlier one; an hour more clears it.
         vm.warp(block.timestamp + 3_600);
         assertEq(exchange.outflowRemaining(), 1_000_000e6);
+        PriceOracle.Quote memory junk;
         vm.prank(alice);
-        uint256 d = exchange.redeemPosted(address(pB), sharesB, 0, alice);
+        uint256 d = exchange.redeem(address(pB), sharesB, 0, alice, junk, "");
         assertEq(1_000_000e6 - exchange.outflowRemaining(), d);
     }
 
     function test_loweringTheCapBelowUsedClosesTheHourWithoutUnderflow() public {
         uint256 shares = _mint(alice, ID, 1_000e6);
         _redeem(alice, ID, shares / 2);
-        vm.prank(owner);
-        exchange.setOutflowCap(1);
+        _fixedCap(1);
         assertEq(exchange.outflowRemaining(), 0);
-        (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, SELL);
-        vm.prank(alice);
-        vm.expectRevert();
-        exchange.redeem(address(pA), 1e6, 0, alice, q, sig);
+        uint256 before = usdg.balanceOf(alice);
+        uint256 out = _redeem(alice, ID, 1e6);
+        assertEq(usdg.balanceOf(alice), before, "a sale with the hour closed was paid at once");
+        (,,,, uint256 owed) = _delayed(0);
+        assertEq(owed, out);
     }
 
-    /* =============================================== 4. unbacked cap */
+    /* =============================================== 4. unbacked risk cap */
 
-    function test_unbackedCapExactBoundary() public {
+    function test_riskCapExactBoundary() public {
         _back(ID, 0);
-        // At 60c + 0.25% the share costs 0.6015: 1,203 USDG buys exactly 2,000 shares.
-        assertEq(exchange.mintOut(600_000, 1_203e6), 2_000e6);
-        _mint(alice, ID, 1_203e6);
-        assertEq(pA.totalSupply(), exchange.defaultMaxUnbacked());
+        // At 60c a share can rise 40c: $1,000 of risk is 2,500 unbacked shares.
+        // At 60c + 0.25% the share costs 0.6015: 1,503.75 USDG buys exactly 2,500.
+        assertEq(exchange.mintOut(600_000, 1_503_750_000), 2_500e6);
+        _mint(alice, ID, 1_503_750_000);
+        assertEq((pA.totalSupply() * 400_000) / 1e6, exchange.defaultMaxRisk());
         (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, BUY);
         uint256 more = exchange.mintOut(600_000, 1e6);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.UnbackedCap.selector, 2_000e6 + more, 2_000e6));
+        vm.expectRevert(abi.encodeWithSelector(PExchange.RiskCap.selector, ((2_500e6 + more) * 400_000) / 1e6, 1_000e6));
         exchange.mint(address(pA), 1e6, 0, alice, q, sig);
+    }
+
+    function test_riskCapLetsNearCertainMarketsGoFurtherUnbacked() public {
+        _back(ID, 0);
+        // At 98c a share can rise 2c: $1,000 of risk is 50,000 unbacked shares.
+        _postOnChain(ID, 980_000);
+        uint256 got = _mint(alice, ID, 40_000e6);
+        assertGt(got, 40_000e6);
+        // The same dollars at 20c would be 25x the risk: refused.
+        _postOnChain(ID_B, 200_000);
+        _back(ID_B, 0);
+        (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID_B, BUY);
+        vm.prank(alice);
+        vm.expectRevert();
+        exchange.mint(address(pB), 1_000e6, 0, alice, q, sig);
+        // It is judged at the quoted price: a quote signed low buys less room.
+        assertGt(_mint(alice, ID_B, 200e6), 0);
+    }
+
+    function test_riskStillCountsSharesHeldForDelayedSales() public {
+        _back(ID, 0);
+        uint256 shares = _mint(alice, ID, 1_503_750_000); // at the cap
+        _fixedCap(1);
+        _redeem(alice, ID, shares); // all but 1 wei's worth delayed, held by the exchange
+        assertGt(exchange.delayedShares(ID), 0);
+        // A cancel would hand them back, so they still take up the room.
+        (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, BUY);
+        vm.prank(bob);
+        vm.expectPartialRevert(PExchange.RiskCap.selector);
+        exchange.mint(address(pA), 1_000e6, 0, bob, q, sig);
     }
 
     function test_backingMovesTheCapAndSellsStillWorkWhenOverIt() public {
         _back(ID, 0);
-        uint256 shares = _mint(alice, ID, 1_203e6);
+        uint256 shares = _mint(alice, ID, 1_503_750_000);
         _back(ID, 1_000e6);
         uint256 more = _mint(alice, ID, 601_500_000); // exactly 1,000 more shares
         assertEq(more, 1_000e6);
@@ -831,32 +657,31 @@ contract ExchangeTimingTest is PolypadBase {
         assertGt(_redeem(alice, ID, shares), 0);
     }
 
-    function test_perMarketUnbackedOverrideAndItsZeroMeansDefault() public {
+    function test_perMarketRiskOverrideAndItsZeroMeansDefault() public {
         _back(ID, 0);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, 100e6);
+        exchange.setMaxRisk(ID, 40e6); // 100 shares at 60c
         (PriceOracle.Quote memory q, bytes memory sig) = _qNow(ID, BUY);
         vm.prank(alice);
         vm.expectRevert();
         exchange.mint(address(pA), 100e6, 0, alice, q, sig);
         _mint(alice, ID, 60e6);
-        // Setting 0 does NOT close the market: it restores the 2,000 default.
+        // Setting 0 does NOT close the market: it restores the $1,000 default.
         // (To stop mints on one market use pause, or a 1-wei cap.)
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, 0);
-        assertEq(exchange.maxUnbacked(ID), exchange.defaultMaxUnbacked());
+        exchange.setMaxRisk(ID, 0);
+        assertEq(exchange.maxRisk(ID), exchange.defaultMaxRisk());
         _mint(alice, ID, 600e6);
     }
 
-    function test_settledMintsBypassTheUnbackedCap() public {
-        vm.prank(owner);
-        exchange.setOutflowCap(1_000_000e6);
+    function test_settledMintsBypassTheRiskCap() public {
+        _fixedCap(1_000_000e6);
         _back(ID, 0);
         _settle(ID, 1e6);
         PriceOracle.Quote memory junk;
         vm.prank(alice);
         uint256 out = exchange.mint(address(pA), 50_000e6, 0, alice, junk, "");
-        assertGt(out, exchange.defaultMaxUnbacked());
+        assertGt(out, 2_500e6);
         // Minted at payout + buy spread; redeemed at payout - settle fee: no round-trip profit.
         uint256 before = usdg.balanceOf(alice);
         vm.prank(alice);
@@ -1043,7 +868,8 @@ contract ExchangeTimingTest is PolypadBase {
         assertEq(exchange.payQueue(5), 0);
     }
 
-    function test_haltStopsTradesNotQueuePayments() public {
+    /// v9: a halt freezes queue payments too, until the owner resumes.
+    function test_haltStopsTradesAndQueuePayments() public {
         uint256 a = _mint(alice, ID, 100e6);
         _drainFloat();
         uint256 oa = _redeem(alice, ID, a / 2);
@@ -1053,15 +879,14 @@ contract ExchangeTimingTest is PolypadBase {
         vm.startPrank(alice);
         vm.expectRevert(PExchange.Halted.selector);
         exchange.redeem(address(pA), 1e6, 0, alice, q, sig);
+        (q, sig) = _qNow(ID, BUY);
         vm.expectRevert(PExchange.Halted.selector);
-        exchange.redeemPosted(address(pA), 1e6, 0, alice);
-        vm.expectRevert(PExchange.Halted.selector);
-        exchange.mintPosted(address(pA), 1e6, 0, alice);
+        exchange.mint(address(pA), 1e6, 0, alice, q, sig);
         vm.stopPrank();
         uint256 before = usdg.balanceOf(alice);
         usdg.mint(address(exchange), oa);
+        vm.expectRevert(PExchange.Halted.selector);
         exchange.payQueue(1);
-        assertEq(usdg.balanceOf(alice) - before, oa);
         // Keeper cannot resume.
         vm.prank(keeper);
         vm.expectRevert();
@@ -1071,6 +896,8 @@ contract ExchangeTimingTest is PolypadBase {
         exchange.halt();
         vm.prank(owner);
         exchange.resume();
+        exchange.payQueue(1);
+        assertEq(usdg.balanceOf(alice) - before, oa);
     }
 
     function test_rescueNeverTakesTheFloatOrShares() public {
@@ -1113,13 +940,9 @@ contract ExchangeTimingTest is PolypadBase {
         vm.startPrank(alice);
         vm.expectRevert(PExchange.BadParams.selector);
         exchange.mint(address(pA), 10e6, 0, address(0), q, sig);
-        vm.expectRevert(PExchange.BadParams.selector);
-        exchange.mintPosted(address(pA), 10e6, 0, address(0));
         (q, sig) = _qNow(ID, SELL);
         vm.expectRevert(PExchange.BadParams.selector);
         exchange.redeem(address(pA), s, 0, address(0), q, sig);
-        vm.expectRevert(PExchange.BadParams.selector);
-        exchange.redeemPosted(address(pA), s, 0, address(0));
         vm.stopPrank();
         _settle(ID, 1e6);
         PriceOracle.Quote memory junk;
@@ -1162,6 +985,7 @@ contract ExchangeTimingTest is PolypadBase {
     function test_bandBoundaries() public {
         uint64 lo = exchange.minPrice();
         uint64 hi = exchange.maxPrice();
+        assertEq(hi, 980_000, "the default ceiling is 98c");
         (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, BUY, lo, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
@@ -1222,17 +1046,7 @@ contract ExchangeTimingTest is PolypadBase {
         vm.expectRevert(PExchange.BadParams.selector);
         exchange.setSettleFee(201);
         vm.expectRevert(PExchange.BadParams.selector);
-        exchange.setPostedParams(1_001, 500e6, 2_000e6);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(0, 90, 30_000, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(86_401, 90, 30_000, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(900, 601, 30_000, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(900, 90, 0, 15);
-        vm.expectRevert(PriceOracle.BadParams.selector);
-        oracle.setPostParams(900, 90, 30_000, 3_601);
+        exchange.setOutflowCap(10_000e6, 100_001);
         vm.stopPrank();
     }
 
@@ -1243,8 +1057,6 @@ contract ExchangeTimingTest is PolypadBase {
         vm.startPrank(alice);
         vm.expectRevert(abi.encodeWithSelector(PExchange.SettledAtZero.selector, ID));
         exchange.mint(address(pA), 10e6, 0, alice, junk, "");
-        vm.expectRevert(abi.encodeWithSelector(PExchange.SettledAtZero.selector, ID));
-        exchange.mintPosted(address(pA), 10e6, 0, alice);
         // minOut protects a holder from burning into nothing.
         vm.expectRevert(abi.encodeWithSelector(PExchange.Slippage.selector, 0, 1));
         exchange.redeem(address(pA), s, 1, alice, junk, "");
@@ -1257,7 +1069,7 @@ contract ExchangeTimingTest is PolypadBase {
         payout = uint64(bound(payout, 1, 1e6));
         usdgIn = bound(usdgIn, 1e6, 50_000e6);
         vm.prank(owner);
-        exchange.setOutflowCap(type(uint256).max);
+        exchange.setOutflowCap(type(uint256).max, 0);
         _settle(ID, payout);
         PriceOracle.Quote memory junk;
         uint256 denom = (uint256(payout) * (10_000 + exchange.buySpreadBps()) + 9_999) / 10_000;
@@ -1297,8 +1109,9 @@ contract ExchangeTimingTest is PolypadBase {
         price = uint64(bound(price, exchange.minPrice(), exchange.maxPrice()));
         usdgIn = bound(usdgIn, 1, 5_000e6);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint128).max);
-        (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, BUY, price, type(uint256).max, uint64(block.timestamp + 15));
+        exchange.setMaxRisk(ID, type(uint128).max);
+        (PriceOracle.Quote memory q, bytes memory sig) =
+            _q(ID, BUY, price, type(uint256).max, uint64(block.timestamp + 15));
         vm.prank(alice);
         try exchange.mint(address(pA), usdgIn, 0, alice, q, sig) returns (uint256 shares) {
             (q, sig) = _q(ID, SELL, price, type(uint256).max, uint64(block.timestamp + 15));
@@ -1329,27 +1142,10 @@ contract ExchangeTimingTest is PolypadBase {
         vm.expectRevert(abi.encodeWithSelector(PExchange.Slippage.selector, expect, expect + 1));
         exchange.mint(address(pA), 100e6, expect + 1, alice, q, sig);
         uint256 s = exchange.mint(address(pA), 100e6, expect, alice, q, sig);
-        uint256 postedExpect = exchange.mintPostedOut(ID, 100e6);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.Slippage.selector, postedExpect, postedExpect + 1));
-        exchange.mintPosted(address(pA), 100e6, postedExpect + 1, alice);
         (q, sig) = _qNow(ID, SELL);
         uint256 rOut = exchange.redeemOut(600_000, s);
         vm.expectRevert(abi.encodeWithSelector(PExchange.Slippage.selector, rOut, rOut + 1));
         exchange.redeem(address(pA), s, rOut + 1, alice, q, sig);
-        uint256 pOut = exchange.redeemPostedOut(ID, s);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.Slippage.selector, pOut, pOut + 1));
-        exchange.redeemPosted(address(pA), s, pOut + 1, alice);
         vm.stopPrank();
-    }
-
-    /// Price moving between quote fetch and inclusion: the signed quote pins the
-    /// price, so the user's minOut is met or the tx reverts; a posted trade sees
-    /// the new post and minOut catches it.
-    function test_postMovesBetweenQuoteAndInclusionMinOutCatchesIt() public {
-        uint256 expect = exchange.mintPostedOut(ID, 100e6);
-        _postOnChain(ID, 620_000); // lands first
-        vm.prank(alice);
-        vm.expectRevert();
-        exchange.mintPosted(address(pA), 100e6, expect, alice);
     }
 }

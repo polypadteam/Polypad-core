@@ -103,8 +103,8 @@ contract QueueInvariants is PolypadBase {
         super.setUp();
         (, curve) = _launch(ID);
         vm.startPrank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
-        exchange.setOutflowCap(type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
+        exchange.setOutflowCap(type(uint256).max, 0);
         vm.stopPrank();
         // Start from an empty float: every sell leans on the queue.
         uint256 seed = usdg.balanceOf(address(exchange));

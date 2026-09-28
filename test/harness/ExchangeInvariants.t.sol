@@ -8,23 +8,26 @@ import {PolypadBase} from "../Polypad.t.sol";
 import {ExchangeHandler} from "./ExchangeHandler.sol";
 
 /**
- * Stateful fuzzing of the exchange's money: whatever sequence of trades, posts,
- * pauses, settlements, freezes, desk transfers and queue payments happens, the
+ * Stateful fuzzing of the exchange's money: whatever sequence of trades, price
+ * moves, delayed sales, pauses, settlements, freezes, desk transfers and queue payments happens, the
  * exchange's USDG, its queue and its share supply must add up exactly.
  */
 contract ExchangeInvariantsTest is PolypadBase {
     ExchangeHandler internal h;
-    address internal poster = makeAddr("poster");
     uint256 internal initialFloat;
     address[] internal actors;
 
     function setUp() public override {
         super.setUp();
         vm.startPrank(owner);
-        oracle.setPoster(poster);
         exchange.ensurePToken(ID);
         exchange.ensurePToken(ID_B);
-        exchange.setOutflowCap(200_000e6);
+        // Low enough that runs of sales go over it and get delayed: 3% of the
+        // float (about $3,000 to start, less once the desk takes it), at least $2,000.
+        exchange.setOutflowCap(2_000e6, 300);
+        // Room to mint whatever the keeper last reported, so trades keep landing.
+        exchange.setMaxRisk(ID, 50_000e6);
+        exchange.setMaxRisk(ID_B, 50_000e6);
         vm.stopPrank();
 
         uint256[] memory ids = new uint256[](2);
@@ -33,8 +36,6 @@ contract ExchangeInvariantsTest is PolypadBase {
         uint64[] memory prices = new uint64[](2);
         prices[0] = 600_000;
         prices[1] = 300_000;
-        vm.prank(poster);
-        oracle.post(ids, prices);
         uint256[] memory amounts = new uint256[](2);
         amounts[0] = 20_000e6;
         amounts[1] = 20_000e6;
@@ -50,11 +51,43 @@ contract ExchangeInvariantsTest is PolypadBase {
         }
         initialFloat = usdg.balanceOf(address(exchange));
 
-        h = new ExchangeHandler(exchange, oracle, usdg, signerPk, keeper, poster, bridge, [ID, ID_B], actors);
+        h = new ExchangeHandler(exchange, oracle, usdg, signerPk, keeper, bridge, [ID, ID_B], actors);
         targetContract(address(h));
         excludeSender(address(exchange));
         excludeSender(address(oracle));
         excludeSender(address(usdg));
+    }
+
+    /// The handler's delayed-sale paths do what the invariants assume: a sale over
+    /// the cap is split, the delayed part is released after DELAY or cancelled.
+    function test_handlerDelaysReleasesAndCancels() public {
+        // Distinct prices, so each trade signs a distinct quote.
+        for (uint256 i; i < 3; ++i) {
+            h.mint(i, 0, 3_000e6, 40_000 + i);
+        }
+        h.redeem(0, 0, 100, 40_000); // ~$3,000 against a ~$3,090 cap
+        h.redeem(1, 0, 100, 40_001); // over it: mostly delayed
+        h.redeem(2, 0, 100, 40_002); // all delayed
+        assertGe(h.knownDelayed(), 2, "nothing was delayed");
+        assertEq(
+            uint64(uint256(vm.load(address(exchange), bytes32(HOUR_FLOAT_SLOT)))),
+            block.timestamp / 3_600,
+            "the hour's float snapshot was not found"
+        );
+        invariant_hourOutflowWithinSnapshotCap();
+        assertGt(h.ghostDelayed(), 0);
+        invariant_delayedSalesAddUp();
+        invariant_outflowWithinCap();
+
+        h.release(0); // too early: nothing happens
+        h.cancel(1);
+        vm.warp(block.timestamp + exchange.DELAY());
+        h.release(0);
+        assertEq(h.ghostDelayed(), 0, "a delayed sale is still pending");
+        invariant_delayedSalesAddUp();
+        invariant_shareSupplyMatchesMintsAndBurns();
+        invariant_usdgBalanceIsExactlyAccountedFor();
+        invariant_queuedIsOwedMinusDelivered();
     }
 
     function _unclaimedSum() internal view returns (uint256 sum) {
@@ -103,29 +136,83 @@ contract ExchangeInvariantsTest is PolypadBase {
         assertEq(exchange.freeFloat(), bal > q ? bal - q : 0);
     }
 
-    /// Shares exist only as minted minus burned, all held by the actors.
+    /// Shares exist only as minted minus burned, held by the actors (or their sinks,
+    /// where a cancelled sale returns them) and by the exchange for delayed sales.
     function invariant_shareSupplyMatchesMintsAndBurns() public view {
         for (uint256 m; m < 2; ++m) {
             PToken p = PToken(address(h.tokens(m)));
             assertEq(p.totalSupply(), h.ghostMinted(m) - h.ghostBurned(m));
-            uint256 held;
+            uint256 held = p.balanceOf(address(exchange));
             for (uint256 i; i < actors.length; ++i) {
-                held += p.balanceOf(actors[i]);
+                held += p.balanceOf(actors[i]) + p.balanceOf(h.sinkOf(actors[i]));
             }
             assertEq(held, p.totalSupply());
         }
     }
 
-    /// The hour's outflow never exceeds the cap.
+    /// Live delayed sales hold exactly the pToken the exchange keeps for them, and
+    /// owe exactly what the ghost books say is held back.
+    function invariant_delayedSalesAddUp() public view {
+        uint256 owed;
+        uint256[2] memory shares;
+        uint256 n = h.knownDelayed();
+        for (uint256 i; i < n; ++i) {
+            (address to,, uint256 id, uint128 pAmount, uint128 amount) = exchange.delayed(i);
+            if (to == address(0)) {
+                assertEq(amount, 0, "a finished delayed sale still owes");
+                continue;
+            }
+            owed += amount;
+            shares[id == ID ? 0 : 1] += pAmount;
+        }
+        assertEq(owed, h.ghostDelayed());
+        for (uint256 m; m < 2; ++m) {
+            uint256 id = m == 0 ? ID : ID_B;
+            assertEq(exchange.delayedShares(id), shares[m]);
+            assertEq(PToken(address(h.tokens(m))).balanceOf(address(exchange)), shares[m]);
+        }
+    }
+
+    /// @dev PExchange's `hourFloat` slot (`forge inspect PExchange storageLayout`).
+    uint256 internal constant HOUR_FLOAT_SLOT = 26;
+
+    /// Within a clock hour, what left through redemptions never passes the cap
+    /// fixed by the float snapshot taken at the hour's first trade.
+    function invariant_hourOutflowWithinSnapshotCap() public view {
+        uint256 word = uint256(vm.load(address(exchange), bytes32(HOUR_FLOAT_SLOT)));
+        uint256 snapHour = uint64(word);
+        uint256 snapAmount = word >> 64;
+        uint256 hour = block.timestamp / 3_600;
+        assertLe(snapHour, hour, "hourFloat slot moved: update HOUR_FLOAT_SLOT");
+        if (snapHour != hour) return;
+        uint256 cap = (snapAmount * exchange.outflowFloatBps()) / 10_000;
+        if (cap < exchange.outflowFloor()) cap = exchange.outflowFloor();
+        assertLe(exchange.outflowInHour(hour), cap);
+        assertLe(exchange.outflowRemaining() + exchange.outflowInHour(hour), cap);
+    }
+
+    /// No redemption paid or queued more at once than the hour's cap had left,
+    /// and `absorb` never burned shares held for a delayed sale.
     function invariant_outflowWithinCap() public view {
-        assertLe(exchange.outflowInHour(block.timestamp / 3_600), exchange.outflowCapPerHour());
+        assertFalse(h.ghostOverCap(), "a sale went past the cap undelayed");
+        assertFalse(h.ghostAbsorbedDelayed(), "absorb burned delayed shares");
     }
 
     /// Coverage probe (run with -vv and FOUNDRY_INVARIANT_RUNS=1 to see what the fuzzer reaches).
     function afterInvariant() external view {
         if (vm.envOr("EX_HARNESS_COVERAGE", false)) {
-            string[10] memory k = [
-                "mint", "redeem", "mintPosted", "redeemPosted", "payQueue", "freeze", "withdrawUnclaimed", "settle", "post", "queueThenFreeze"
+            string[11] memory k = [
+                "mint",
+                "redeem",
+                "delayed",
+                "release",
+                "cancel",
+                "payQueue",
+                "freeze",
+                "withdrawUnclaimed",
+                "settle",
+                "post",
+                "queueThenFreeze"
             ];
             for (uint256 i; i < k.length; ++i) {
                 console.log(k[i], h.hits(keccak256(bytes(k[i]))));

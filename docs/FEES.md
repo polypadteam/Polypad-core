@@ -42,7 +42,7 @@ A $100 buy of a coin still on its curve:
 | When | Fee |
 | --- | --- |
 | Cashing out shares after the market has resolved | 0.5% (instead of the spread) |
-| Trading at the on-chain posted price (no signed quote, e.g. a plain contract call) | 1.5% spread instead of 0.25%; **not available at launch** |
+| Selling a coin for its market shares (`Router.sellForShares`, no USDG) | none beyond the coin's trading fee |
 | Claiming creator fees or holder rewards | none (network gas only) |
 
 ## Creator fees

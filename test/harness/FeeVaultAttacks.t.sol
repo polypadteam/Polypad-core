@@ -43,7 +43,7 @@ contract FeeVaultAttacks is PolypadBase {
         usdg.mint(bob, 1_000_000e6);
         usdg.mint(address(exchange), 10_000_000e6);
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
     }
 
     function _p(Coin c) internal view returns (PToken) {

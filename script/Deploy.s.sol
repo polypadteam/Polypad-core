@@ -31,14 +31,14 @@ contract DevUSDG is ERC20 {
  * Env:
  *   PRICE_SIGNER     signs quotes off chain (holds no funds)
  *   KEEPER           reports backing, pauses and settles markets, sends float to the
- *                    bridge, may halt the exchange, and posts prices (poster)
+ *                    bridge, and may halt the exchange
  *   PLATFORM         receives the platform fee (default: the exchange, so fees build the float)
  *   USDG             collateral; omit with DEV_USDG=1 to deploy a dev token
  *   BRIDGE_DEPOSIT   the desk's Polymarket deposit address (optional; set later with setRoles)
  *   GRAD_USD         graduation target in USDG units (default 6000e6)
  *   POOL_MANAGER     Uniswap v4 PoolManager (default: Robinhood Chain's)
- *   OUTFLOW_CAP      hourly redemption cap in USDG units (default 1,000,000e6)
- *   POSTED_MAX_TRADE / POSTED_MAX_BLOCK  posted-path limits for terminals (default 5,000e6 / 20,000e6)
+ *   OUTFLOW_FLOOR    hourly redemption cap floor in USDG units (default 5,000e6)
+ *   OUTFLOW_FLOAT_BPS  hourly redemption cap as bps of the float (default 5,000 = 50%, at most 10,000)
  *   DEPLOY_OUT       output path (default deployments/<chainid>.json; set it for local runs)
  *
  * The broadcaster becomes the owner of the oracle, exchange and factory.
@@ -120,12 +120,8 @@ contract Deploy is Script {
     function _configure(Out memory o, address platform) internal {
         address keeper = vm.envAddress("KEEPER");
         o.exchange.setRoles(keeper, address(o.factory), vm.envOr("BRIDGE_DEPOSIT", address(0)));
-        o.exchange.setOutflowCap(vm.envOr("OUTFLOW_CAP", uint256(1_000_000e6)));
-        // The posted path is off until it fills in two steps: a one-step trade at a
-        // posted price can be raced by anyone who sees Polymarket move before the post.
         o.exchange
-            .setPostedParams(150, vm.envOr("POSTED_MAX_TRADE", uint256(0)), vm.envOr("POSTED_MAX_BLOCK", uint256(0)));
-        o.oracle.setPoster(keeper);
+            .setOutflowCap(vm.envOr("OUTFLOW_FLOOR", uint256(5_000e6)), vm.envOr("OUTFLOW_FLOAT_BPS", uint256(5_000)));
         uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
         if (gradUsd != 6_000e6) o.factory.setConfig(platform, gradUsd);
     }

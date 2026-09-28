@@ -11,7 +11,7 @@ contract GasTest is PolypadBase {
     function setUp() public override {
         super.setUp();
         vm.prank(owner);
-        exchange.setMaxUnbacked(ID, type(uint256).max);
+        exchange.setMaxRisk(ID, type(uint256).max);
     }
 
     function _measure(uint16 bps) internal returns (uint256 buy1, uint256 buy2, uint256 sell, uint256 transfer) {

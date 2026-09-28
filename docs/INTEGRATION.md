@@ -27,12 +27,12 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x36A9d6A0FBf4824f2Af9d07FD0AC2aA89db4972D` | Creates coins; emits `Launched` |
-| Router | `0xF56C368e0a279F0497e10982014D675E9bb84e6c` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x08Ac1CFc3Dc3f0b9d0FdB42C357A1d4ec39Ff6ea` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0xb9165fe62ceC9d6a7b6BB5E4245b2D2097148008` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0xb9CA08340edB22fE958BE3cD4eeC50a411CC2000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
-| FeeVault | `0x786D5699d7E1f5759F7a99D033494f4710f3F131` | Creator fees and holder dividends |
+| LaunchFactory | `0x9113bCe8C11c59989ce7280C7059e113C395E0c6` | Creates coins; emits `Launched` |
+| Router | `0x4a5A23C56D94B0fc588F388Dc7ADb6903D125562` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0x84A04b7D2A6b27edbdD345ab24e9100054E380bF` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0x101a82DAedBeD2d3aDE34436959b3c9aE113a947` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0xe073c70954197073a007544c70A25318f1DD2000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| FeeVault | `0x4B082719a79A002364797B5DEeb0368393E08DBD` | Creator fees and holder dividends |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
@@ -73,15 +73,15 @@ event Swap(
     uint256 usdg,          // USDG paid or received, 6 decimals
     uint256 coins,         // coins bought or sold, 18 decimals
     uint256 pTokens,       // shares into or out of the curve, 6 decimals
-    uint256 pTokenRefund,  // shares returned when a buy hit the end of the curve
-    bool posted            // priced by the on-chain posted price (true) or a signed quote
+    uint256 pTokenRefund   // shares returned when a buy hit the end of the curve
 );
-// topic0 = keccak256("Swap(address,address,address,bool,uint256,uint256,uint256,uint256,bool)")
+// topic0 0xf3369c7e0aa652773c7246b5481ca4b1ee0b408d90467d2ce93b165b9938fde5 (v9; v8 had a final `bool posted`)
 ```
 
-Every trade made with USDG, by any path, is one `Swap` from the Router: watch
-**one address** for all trades of all coins. Price and volume come straight
-from it; no knowledge of pTokens is needed.
+Every trade made through the Router is one `Swap`: watch **one address** for
+all trades of all coins. Price and volume come straight from it; no knowledge
+of pTokens is needed. A sale for shares (`sellForShares`, below) has `usdg = 0`:
+it moved no dollars, so skip it for the dollar price and volume.
 
 ### All trades — BondingCurve
 
@@ -157,8 +157,8 @@ event Graduated(address indexed coin, address indexed pToken, bytes32 indexed po
 - After graduation the curve no longer trades. Trades are ordinary v4 `Swap`
   events on the PoolManager for that `poolId`; Router trades still emit the
   Router `Swap` with USDG amounts, and `curve.spotPrice()` reads the pool.
-- The Router's `buy` / `sell` / `buyPosted` / `sellPosted` work unchanged: they
-  route to the pool once the coin has graduated. `Router.quotePool(curve,
+- The Router's `buy` / `sell` / `sellForShares` work unchanged: they route to
+  the pool once the coin has graduated. `Router.quotePool(curve,
   pTokenIn, amount)` (call it with `eth_call`) quotes a pool trade.
 - `GET /v1/coins/<address>` adds `pool` once graduated: the pool key and id,
   `sqrtPriceX96`, total `liquidity`, the full-range reserves it implies
@@ -213,30 +213,30 @@ charged on Robinhood Chain.
 
 ## Letting users trade
 
-Two ways; pick either.
+Buying, and selling for USDG, need a signed price from the live Polymarket book,
+so they go through our swap API. Selling a coin for its market's shares needs
+nothing from us.
 
-### 1. Plain contract calls (no API): closed at launch
-
-> **Closed in v7.** `postedMaxTrade` is 0, so these calls revert. Testing showed
-> a one-step trade at a posted price can be raced: anyone who sees the
-> Polymarket book move before the next post can buy at the old price and sell at
-> the new one, at the float's expense. It reopens once posted trades fill in two
-> steps (request, then fill at the first post after it). Use the swap API (2).
+### 1. Plain contract calls (no API)
 
 ```solidity
-// Buy: approve USDG to the Router first.
-router.buyPosted(address curve, uint256 usdgIn, uint256 minCoins, address to)
-// Sell: approve the coin to the Router first.
-router.sellPosted(address curve, uint256 coinsIn, uint256 minUsdg, address to)
+// Sell: approve the coin to the Router first. Pays the pToken (6 decimals) to `to`.
+router.sellForShares(address curve, uint256 coinsIn, uint256 minShares, address to)
 ```
 
-Priced at the price Polypad posts on chain for the coin's market
-(`PriceOracle.posted(positionId)`), plus a 1.5% spread each way, up to $500 per
-trade and $2,000 per market per block. Preview the output with
-`exchange.mintPostedOut(positionId, usdgIn)` then `curve.quoteBuy(...)`, or
-`curve.quoteSell(coins)` then `exchange.redeemPostedOut(positionId, pTokens)`.
-The posted path pauses itself for a few seconds after a big odds move and
-whenever the price poster is not running; trades then revert and can be retried.
+Priced by the curve (or the pool once graduated) alone, with the coin's trading
+fee and no exchange spread. Preview with `curve.quoteSell(coins)`, or
+`Router.quotePool` once graduated. The pToken is one Polymarket share of the
+coin's outcome: keep it, redeem it for USDG through the API, or cash it out at
+$1 / $0 once the market settles.
+
+Once a market has settled with a payout, `buy` and `sell` need no quote either:
+pass an empty quote and signature, and the exchange prices the share at the
+payout (0.25% in, 0.5% out).
+
+The on-chain posted price that older versions offered for plain calls was
+removed in v9: a one-step trade at a posted price can be raced by anyone who
+sees Polymarket move before the next post.
 
 ### 2. Our swap API (best price, any size)
 
@@ -250,6 +250,7 @@ GET https://api.polypad.trade/v1/swap
     ?coin=0x…&side=buy|sell
     &amount=<USDG base units for buy, coin base units for sell>
     &taker=0x…&slippageBps=100
+    [&receive=shares]      sells only: pay the market's pToken, not USDG (sellForShares, no quote)
 ```
 
 ```json
@@ -276,6 +277,12 @@ If the exchange's USDG float is ever short, a sell still goes through: the
 seller is owed the exact amount (`PExchange.Queued(ticket, to, amount)`) and is
 paid automatically, oldest first, as the float refills (usually within a
 minute; `ClaimPaid`).
+
+Redemptions are also metered per hour (at least $5,000, and 50% of the
+float). A sale past that is never refused: the part over it is fixed at its
+price and paid an hour later (`SaleDelayed(ticket, positionId, to, pAmount,
+amount, readyAt)`, then `Released(ticket)`; anyone may call
+`PExchange.release(ticket)` once `readyAt` passes, and our keeper does).
 
 ## Live data and charts
 
