@@ -7,10 +7,10 @@ optimizer = true
 optimizer_runs = 1_000_000
 via_ir = false
 evm_version = "cancun"
-# PExchange is compiled for size (runs 20,000), as deployed: at 1,000,000 it
+# PExchange is compiled for size (runs 5,000), as deployed: at 1,000,000 it
 # sits within ~100 bytes of the EIP-170 limit.
-additional_compiler_profiles = [{ name = "exchange", optimizer_runs = 20000 }]
-compilation_restrictions = [{ paths = "src/PExchange.sol", optimizer_runs = 20000 }]
+additional_compiler_profiles = [{ name = "exchange", optimizer_runs = 5000 }]
+compilation_restrictions = [{ paths = "src/PExchange.sol", optimizer_runs = 5000 }]
 fs_permissions = [{ access = "read-write", path = "./deployments" }, { access = "read", path = "./test/fixtures" }]
 
 remappings = [

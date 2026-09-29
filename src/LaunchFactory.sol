@@ -25,6 +25,12 @@ import {PToken} from "./PToken.sol";
  * The graduation target is set in dollars and converted to shares at the launch
  * price, so every curve raises about `gradUsd` if the odds do not move. The
  * phantom reserve is 0.4x the target in shares, the same ratio as WORM.
+ *
+ * At most `newMarketsPerDay` launches a day (UTC; up to twice that across
+ * midnight) may open a market that has no pToken yet. Each market has its own
+ * unbacked-risk cap at the exchange, so without a limit a stolen signing key
+ * could open markets without end and multiply it. The keeper opens markets
+ * outside the limit (`openMarkets`) when launches have used it up.
  */
 contract LaunchFactory is Ownable2Step {
     PExchange public immutable exchange;
@@ -55,6 +61,12 @@ contract LaunchFactory is Ownable2Step {
     address[] public curves;
     mapping(address => bool) public isCurve;
 
+    /// @notice New markets (first launch on a market) allowed per UTC day.
+    uint256 public newMarketsPerDay = 20;
+    /// @notice The owner can raise the daily limit at most this far.
+    uint256 public constant MAX_NEW_MARKETS_PER_DAY = 500;
+    mapping(uint256 day => uint256) public newMarketsOn;
+
     event Launched(
         uint256 indexed positionId,
         address indexed creator,
@@ -69,6 +81,7 @@ contract LaunchFactory is Ownable2Step {
     event GraduatorSet(address graduator);
     event FeeVaultSet(address feeVault);
     event FeesSet(uint16 curveFeeBps, uint16 curveCreatorShareBps, uint24 poolFee, uint16 poolCreatorShareBps);
+    event NewMarketsPerDaySet(uint256 limit);
 
     error QuoteForOtherMarket(uint256 quoted, uint256 positionId);
     error PriceOutOfBand(uint256 price);
@@ -76,6 +89,7 @@ contract LaunchFactory is Ownable2Step {
     error BadParams();
     error BadHoldersShare(uint16 holdersBps);
     error BadFees();
+    error TooManyNewMarkets(uint256 limit);
 
     constructor(address owner_, PExchange exchange_, PriceOracle oracle_, address platform_) Ownable(owner_) {
         exchange = exchange_;
@@ -108,6 +122,22 @@ contract LaunchFactory is Ownable2Step {
         emit FeesSet(f.curveFeeBps, f.curveCreatorShareBps, f.poolFee, f.poolCreatorShareBps);
     }
 
+    /// @notice Open markets (create their pTokens) outside the daily limit, so
+    ///         creators are never locked out when someone uses it up. The
+    ///         exchange's keeper or the owner.
+    function openMarkets(uint256[] calldata ids) external {
+        if (msg.sender != exchange.keeper() && msg.sender != owner()) revert BadParams();
+        for (uint256 i; i < ids.length; ++i) {
+            exchange.ensurePToken(ids[i]);
+        }
+    }
+
+    function setNewMarketsPerDay(uint256 limit) external onlyOwner {
+        if (limit > MAX_NEW_MARKETS_PER_DAY) revert BadParams();
+        newMarketsPerDay = limit;
+        emit NewMarketsPerDaySet(limit);
+    }
+
     function setFeeVault(FeeVault feeVault_) external onlyOwner {
         feeVault = feeVault_;
         emit FeeVaultSet(address(feeVault_));
@@ -129,6 +159,7 @@ contract LaunchFactory is Ownable2Step {
         if (q.positionId != positionId) revert QuoteForOtherMarket(q.positionId, positionId);
         if (address(graduator) == address(0) || address(feeVault) == address(0)) revert NoGraduator();
         if (holdersBps > 10_000) revert BadHoldersShare(holdersBps);
+        if (bytes(name).length > 64 || bytes(symbol).length > 16 || bytes(metadataURI).length > 512) revert BadParams();
         return _deploy(positionId, _launchPrice(q, sig), name, symbol, metadataURI, holdersBps);
     }
 
@@ -153,6 +184,11 @@ contract LaunchFactory is Ownable2Step {
         string calldata metadataURI,
         uint16 holdersBps
     ) internal returns (Coin coin, BondingCurve curve) {
+        if (address(exchange.pTokenOf(positionId)) == address(0)) {
+            uint256 day = block.timestamp / 1 days;
+            if (newMarketsOn[day] >= newMarketsPerDay) revert TooManyNewMarkets(newMarketsPerDay);
+            ++newMarketsOn[day];
+        }
         PToken p = exchange.ensurePToken(positionId);
         // Target in shares = gradUsd / price; phantom = 0.4x target.
         curve = new BondingCurve(

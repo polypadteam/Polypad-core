@@ -28,11 +28,17 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
  * `paused` stops new buys only (holders can still sell). The keeper sets it
  * before a market's end date. `settle` records the final payout once the market
  * resolves on Polygon; it is one-way, and a settled market ignores quotes.
+ *
+ * No quote may price a share above `MAX_PRICE` (99c), on either side: a sale
+ * signed near $1 by a stolen key would pay out almost a dollar for a share the
+ * desk may never have held.
  */
 contract PriceOracle is Ownable2Step, EIP712 {
     uint64 public constant ONE = 1e6;
     /// @notice Longest a quote may be valid for, whatever the signer wrote.
     uint64 public constant MAX_VALIDITY = 30;
+    /// @notice Highest price any quote may carry.
+    uint64 public constant MAX_PRICE = 990_000;
 
     uint8 public constant BUY = 0;
     uint8 public constant SELL = 1;
@@ -55,16 +61,24 @@ contract PriceOracle is Ownable2Step, EIP712 {
         uint64 payout;
         /// @dev When the payout takes effect; 0 = not settled. See `settle`.
         uint64 settleAt;
+        /// @dev Who recorded the settlement now pending or in effect.
+        address settledBy;
+        /// @dev A keeper whose settlement here the owner cancelled: it may not record another.
+        address barred;
     }
 
     mapping(uint256 positionId => Status) internal statuses;
 
     /// @notice Delay before a new signer takes effect. Revoking (zero) is immediate.
     uint256 public constant ROLE_DELAY = 2 days;
+    /// @notice A proposed signer must be accepted within this long after `ROLE_DELAY`,
+    ///         so a forgotten proposal cannot be accepted months later.
+    uint256 public constant ACCEPT_WINDOW = 7 days;
     /// @notice A settlement takes effect this long after the keeper records it,
     ///         and the owner can cancel it meanwhile: one stolen keeper key cannot
-    ///         settle a cheap market at $1 and redeem the float out of it.
-    uint256 public constant SETTLE_DELAY = 1 hours;
+    ///         settle a cheap market at $1 and redeem the float out of it. Long
+    ///         enough for an owner whose key is kept offline to be reached.
+    uint256 public constant SETTLE_DELAY = 6 hours;
 
     /// @notice Signs quotes off chain. Holds no funds.
     address public signer;
@@ -123,7 +137,7 @@ contract PriceOracle is Ownable2Step, EIP712 {
     }
 
     function acceptSigner() external onlyOwner {
-        if (pendingSigner == address(0)) revert NothingPending();
+        if (pendingSigner == address(0) || block.timestamp > pendingSignerAt + ACCEPT_WINDOW) revert NothingPending();
         if (block.timestamp < pendingSignerAt) revert NotYet(pendingSignerAt);
         signer = pendingSigner;
         pendingSigner = address(0);
@@ -149,16 +163,21 @@ contract PriceOracle is Ownable2Step, EIP712 {
     /**
      * @notice Record the final payout per share, 0..1e6. It takes effect after
      *         SETTLE_DELAY, and buying stops at once. One-way once in effect.
+     *         Keeper or owner. A keeper whose settlement on this market the owner
+     *         cancelled may not record another there (its key may be stolen); a
+     *         new keeper may.
      */
-    function settle(uint256 id, uint64 payout) external onlyKeeper {
-        if (payout > ONE) revert PriceOutOfRange(id, payout);
+    function settle(uint256 id, uint64 payout) external {
         Status storage s = statuses[id];
+        if (msg.sender != owner() && (msg.sender != keeper || msg.sender == s.barred)) revert OnlyKeeper();
+        if (payout > ONE) revert PriceOutOfRange(id, payout);
         if (s.settleAt != 0) revert AlreadySettled(id);
         uint64 at = uint64(block.timestamp + SETTLE_DELAY);
         s.pausedBeforeSettle = s.paused;
         s.paused = true;
         s.payout = payout;
         s.settleAt = at;
+        s.settledBy = msg.sender;
         emit PausedSet(id, true);
         emit Settled(id, payout, at);
     }
@@ -169,9 +188,11 @@ contract PriceOracle is Ownable2Step, EIP712 {
         if (s.settleAt == 0 || block.timestamp >= s.settleAt) revert NothingPending();
         s.settleAt = 0;
         s.payout = 0;
+        if (s.settledBy != owner()) s.barred = s.settledBy;
+        s.settledBy = address(0);
         // A wrong settlement leaves the market as it was before it: paused only if
-        // it already was (say, for its end date). If the keeper key recorded it,
-        // rotate the keeper first: it could record it again.
+        // it already was (say, for its end date). The keeper that recorded it can
+        // no longer settle this market; the owner, or a new keeper, can.
         bool was = s.pausedBeforeSettle;
         s.pausedBeforeSettle = false;
         if (!was) {
@@ -214,7 +235,7 @@ contract PriceOracle is Ownable2Step, EIP712 {
         if (q.side != side) revert WrongSide(q.side);
         if (block.timestamp > q.validUntil) revert QuoteExpired(q.validUntil);
         if (q.validUntil > block.timestamp + MAX_VALIDITY) revert QuoteTooLong(q.validUntil);
-        if (q.price == 0 || q.price >= ONE) revert PriceOutOfRange(q.positionId, q.price);
+        if (q.price == 0 || q.price > MAX_PRICE) revert PriceOutOfRange(q.positionId, q.price);
         digest = quoteDigest(q);
         if (ECDSA.recover(digest, sig) != signer) revert BadSignature();
 

@@ -95,11 +95,14 @@ contract AccessMatrixTest is PolypadBase {
         oracle.settle(ID, 1e6);
         vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         vm.stopPrank();
-        // The owner is not the keeper either.
+        // The owner may not pause, but may settle (after a cancel, only it may).
         vm.prank(owner);
         vm.expectRevert(PriceOracle.OnlyKeeper.selector);
-        oracle.settle(ID, 1e6);
-        vm.warp(block.timestamp + oracle.SETTLE_DELAY());
+        oracle.setPaused(_ids(ID), true);
+        vm.prank(owner);
+        oracle.settle(ID_B, 1e6);
+        (, uint64 ownerAt) = oracle.settlement(ID_B);
+        assertEq(ownerAt, block.timestamp + oracle.SETTLE_DELAY());
 
         vm.startPrank(keeper);
         oracle.setPaused(_ids(ID), true);

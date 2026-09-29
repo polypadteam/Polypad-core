@@ -24,6 +24,19 @@ export const priceOracleAbi = [
   },
   {
     "type": "function",
+    "name": "ACCEPT_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "BUY",
     "inputs": [],
     "outputs": [
@@ -31,6 +44,19 @@ export const priceOracleAbi = [
         "name": "",
         "type": "uint8",
         "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_PRICE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -2071,6 +2097,25 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "unbackedRisk",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "unclaimed",
     "inputs": [
       {
@@ -2503,6 +2548,12 @@ export const pExchangeAbi = [
     "inputs": [
       {
         "name": "ticket",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "positionId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
@@ -2982,6 +3033,19 @@ export const launchFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "MAX_NEW_MARKETS_PER_DAY",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_POOL_FEE",
     "inputs": [],
     "outputs": [
@@ -3227,6 +3291,51 @@ export const launchFactoryAbi = [
   },
   {
     "type": "function",
+    "name": "newMarketsOn",
+    "inputs": [
+      {
+        "name": "day",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "newMarketsPerDay",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "openMarkets",
+    "inputs": [
+      {
+        "name": "ids",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "oracle",
     "inputs": [],
     "outputs": [
@@ -3358,6 +3467,19 @@ export const launchFactoryAbi = [
         "name": "graduator_",
         "type": "address",
         "internalType": "contract Graduator"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setNewMarketsPerDay",
+    "inputs": [
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -3509,6 +3631,19 @@ export const launchFactoryAbi = [
   },
   {
     "type": "event",
+    "name": "NewMarketsPerDaySet",
+    "inputs": [
+      {
+        "name": "limit",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "OwnershipTransferStarted",
     "inputs": [
       {
@@ -3615,6 +3750,17 @@ export const launchFactoryAbi = [
       },
       {
         "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TooManyNewMarkets",
+    "inputs": [
+      {
+        "name": "limit",
         "type": "uint256",
         "internalType": "uint256"
       }

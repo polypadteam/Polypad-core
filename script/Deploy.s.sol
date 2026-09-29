@@ -41,7 +41,12 @@ contract DevUSDG is ERC20 {
  *   OUTFLOW_FLOAT_BPS  hourly redemption cap as bps of the float (default 5,000 = 50%, at most 10,000)
  *   DEPLOY_OUT       output path (default deployments/<chainid>.json; set it for local runs)
  *
- * The broadcaster becomes the owner of the oracle, exchange and factory.
+ *   NEW_OWNER        optional: the offline owner wallet. Ownership of the oracle,
+ *                    exchange and factory is offered to it (two-step): it takes
+ *                    effect when that wallet calls `acceptOwnership` on each.
+ *
+ * The broadcaster becomes the owner of the oracle, exchange and factory, until
+ * NEW_OWNER accepts. The deploying key is hot: set NEW_OWNER for production.
  * The Graduator is the v4 hook of every Polypad pool, so it is deployed through
  * the CREATE2 deployer at a salt mined for an address whose low 14 bits are
  * exactly BEFORE_INITIALIZE (0x2000).
@@ -124,6 +129,12 @@ contract Deploy is Script {
             .setOutflowCap(vm.envOr("OUTFLOW_FLOOR", uint256(5_000e6)), vm.envOr("OUTFLOW_FLOAT_BPS", uint256(5_000)));
         uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
         if (gradUsd != 6_000e6) o.factory.setConfig(platform, gradUsd);
+        address newOwner = vm.envOr("NEW_OWNER", address(0));
+        if (newOwner != address(0)) {
+            o.oracle.transferOwnership(newOwner);
+            o.exchange.transferOwnership(newOwner);
+            o.factory.transferOwnership(newOwner);
+        }
     }
 
     function _write(Out memory o) internal {
@@ -137,6 +148,7 @@ contract Deploy is Script {
         vm.serializeAddress(key, "feeVault", address(o.feeVault));
         vm.serializeAddress(key, "poolManager", vm.envOr("POOL_MANAGER", RH_POOL_MANAGER));
         vm.serializeAddress(key, "owner", o.owner);
+        vm.serializeAddress(key, "pendingOwner", vm.envOr("NEW_OWNER", address(0)));
         string memory json = vm.serializeUint(key, "fromBlock", o.fromBlock);
         string memory path = vm.envOr("DEPLOY_OUT", string.concat("deployments/", vm.toString(block.chainid), ".json"));
         vm.writeJson(json, path);

@@ -655,7 +655,10 @@ contract ExchangeTimingTest is PolypadBase {
     function test_backingMovesTheCapAndSellsStillWorkWhenOverIt() public {
         _riskOn(ID);
         uint256 shares = _mint(alice, ID, 1_503_750_000);
-        _back(ID, 1_000e6);
+        // v11: the risk the 2,500 unbacked shares carry ($1,000) only shrinks
+        // to $1 per share still unbacked, since which ones the desk hedged is
+        // unknown: backing 2,000 leaves 500 shares, at most $500.
+        _back(ID, 2_000e6);
         uint256 more = _mint(alice, ID, 601_500_000); // exactly 1,000 more shares
         assertEq(more, 1_000e6);
         // Desk reports less than it had: supply is now well over backing + cap.
@@ -1023,9 +1026,10 @@ contract ExchangeTimingTest is PolypadBase {
         (q, sig) = _q(ID, BUY, 990_000, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
+        // Past 99c the oracle refuses the quote before the band is checked.
         (q, sig) = _q(ID, BUY, 990_001, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 990_001));
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(990_001)));
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
         // The override does not leak to other markets; 0 resets.
         assertEq(exchange.maxPriceOf(ID_B), hi);
@@ -1036,7 +1040,12 @@ contract ExchangeTimingTest is PolypadBase {
 
     function test_sellsHaveNoBand() public {
         uint256 s = _mint(alice, ID, 100e6);
-        (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, SELL, 999_999, 1e12, uint64(block.timestamp + 15));
+        // No exchange band on sells; the oracle's MAX_PRICE (99c) is the ceiling.
+        (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, SELL, 990_001, 1e12, uint64(block.timestamp + 15));
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(990_001)));
+        exchange.redeem(address(pA), s / 2, 0, alice, q, sig);
+        (q, sig) = _q(ID, SELL, 990_000, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
         exchange.redeem(address(pA), s / 2, 0, alice, q, sig);
         (q, sig) = _q(ID, SELL, 1, 1e12, uint64(block.timestamp + 15));

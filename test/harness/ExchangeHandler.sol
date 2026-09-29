@@ -115,7 +115,7 @@ contract ExchangeHandler is Test {
         // Around the market's mid, +-4c, clamped inside (0, 1).
         int256 p = int256(uint256(mid[m])) + int256(seed % 80_001) - 40_000;
         if (p < 1) p = 1;
-        if (p > 999_999) p = 999_999;
+        if (p > 990_000) p = 990_000; // the oracle's MAX_PRICE
         return uint64(uint256(p));
     }
 

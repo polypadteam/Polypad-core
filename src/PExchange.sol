@@ -29,7 +29,9 @@ import {PriceOracle} from "./PriceOracle.sol";
  * supply, and every burn lowers it at once, so shares the desk has yet to sell
  * after a redemption cannot be minted again unhedged. Minting stops for a
  * market once the unbacked supply (`totalSupply - backed`) times what a share
- * could still rise by (`1 - price`) would pass `maxRisk`, in USDG. That caps
+ * could still rise by (`1 - price`) would pass `maxRisk`, in USDG. The price
+ * is the one each unbacked share was minted at (`unbackedRisk` carries the
+ * total), so minting at rising prices cannot re-value cheaper ones. That caps
  * what a missed fill or a stale price can cost per market, and lets the desk
  * leave near-certain shares (a 98c market risks 2c a share) unhedged.
  *
@@ -183,6 +185,12 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     DelayedSale[] public delayed;
     /// @notice pToken held here for delayed sales, per market: `absorb` leaves it alone.
     mapping(uint256 positionId => uint256) public delayedShares;
+    /// @notice The unbacked supply's risk for the cap, packed: the low 192 bits
+    ///         are what it could cost to cover at $1, as the mints that made it
+    ///         priced it (shares x (1 - price), 12 decimals); the top 64 the
+    ///         lowest price minted at since the market was last fully backed
+    ///         (0 = unknown, taken as $0).
+    mapping(uint256 positionId => uint256) public unbackedRisk;
 
     event PTokenCreated(uint256 indexed positionId, address pToken);
     event Minted(uint256 indexed positionId, address indexed to, uint256 usdgIn, uint256 pOut, uint256 price);
@@ -205,7 +213,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         uint256 amount,
         uint256 readyAt
     );
-    event Released(uint256 indexed ticket);
+    event Released(uint256 indexed ticket, uint256 indexed positionId);
     event Cancelled(uint256 indexed ticket);
     event HaltSet(bool halted);
     event Queued(uint256 indexed ticket, address indexed to, uint256 amount);
@@ -367,7 +375,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         delayedShares[d.positionId] -= d.pAmount;
         pTokenOf[d.positionId].burn(address(this), d.pAmount);
         _unback(d.positionId, d.pAmount);
-        emit Released(ticket);
+        emit Released(ticket, d.positionId);
         _pay(d.to, d.amount, true);
     }
 
@@ -397,6 +405,9 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
             PToken p = pTokenOf[ids[i]];
             uint256 supply = address(p) == address(0) ? 0 : p.totalSupply();
             uint256 amount = amounts[i] < supply ? amounts[i] : supply;
+            // Shares that stop being backed carry risk again, at the most a share can.
+            uint256 was = backed[ids[i]];
+            if (amount < was) unbackedRisk[ids[i]] = uint192(unbackedRisk[ids[i]]) + (was - amount) * ONE;
             backed[ids[i]] = amount;
             emit BackedReported(ids[i], amount);
         }
@@ -608,20 +619,35 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         if (out == 0) revert ZeroAmount();
         if (out < minOut) revert Slippage(out, minOut);
 
-        // Shares held for delayed sales still count: a cancel hands them back.
-        uint256 supplyAfter = p.totalSupply() + out;
-        uint256 held = backed[id];
-        if (supplyAfter > held) {
-            // What the unbacked shares would cost to cover if the price went to $1.
-            uint256 risk = ((supplyAfter - held) * (ONE - price)) / ONE;
-            uint256 cap = maxRisk(id);
-            if (risk > cap) revert RiskCap(risk, cap);
-        }
+        _checkRisk(id, p.totalSupply(), out, price);
 
         usdg.safeTransferFrom(msg.sender, address(this), usdgIn);
         p.mint(to, out);
         emit Minted(id, to, usdgIn, out, price);
         if (queued > 0) _payQueue(3);
+    }
+
+    /// @dev The unbacked risk cap. Shares held for delayed sales still count
+    ///      (a cancel hands them back). The risk carried by the unbacked shares
+    ///      is what their mints added, so minting at rising prices cannot
+    ///      re-value cheap ones; once the desk hedges some (whichever they were),
+    ///      what is left can be no riskier than every share at the lowest price
+    ///      minted since the market was last fully backed. Both bounds hold
+    ///      whichever shares were hedged, so the smaller does too.
+    function _checkRisk(uint256 id, uint256 supply, uint256 out, uint64 price) internal {
+        uint256 held = backed[id];
+        uint256 r = unbackedRisk[id];
+        uint256 risk;
+        uint256 low = price;
+        if (supply > held) {
+            if (r >> 192 < low) low = r >> 192;
+            uint256 bound = (supply - held) * (ONE - low);
+            risk = uint192(r) < bound ? uint192(r) : bound;
+        }
+        risk += out * (ONE - price);
+        uint256 cap = maxRisk(id);
+        if (risk / ONE > cap) revert RiskCap(risk / ONE, cap);
+        unbackedRisk[id] = (low << 192) | SafeCast.toUint192(risk);
     }
 
     /// @dev A settled market mints at the payout plus the buy spread. The USDG stays

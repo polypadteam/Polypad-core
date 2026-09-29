@@ -181,18 +181,32 @@ contract LaunchFactoryHarnessTest is PolypadBase {
 
     function test_nameAndMetadataExtremes() public {
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
-        bytes memory longName = new bytes(2_000);
-        for (uint256 i; i < longName.length; ++i) {
-            longName[i] = "a";
-        }
         vm.prank(creator);
         (Coin empty,) = factory.launch(ID, "", "", "", 0, q, sig);
         assertEq(empty.name(), "");
+        // At the caps: name 64 bytes, symbol 16 bytes, metadata URI 512 bytes.
         vm.prank(creator);
-        (Coin long_,) = factory.launch(ID, string(longName), unicode"🚀🚀", string(longName), 0, q, sig);
-        assertEq(bytes(long_.name()).length, 2_000);
-        assertEq(long_.symbol(), unicode"🚀🚀");
+        (Coin long_,) = factory.launch(ID, _str(64), unicode"🚀🚀🚀🚀", _str(512), 0, q, sig);
+        assertEq(bytes(long_.name()).length, 64);
+        assertEq(long_.symbol(), unicode"🚀🚀🚀🚀");
         assertEq(long_.totalSupply(), long_.SUPPLY());
+        // One byte over any cap is refused.
+        vm.startPrank(creator);
+        vm.expectRevert(LaunchFactory.BadParams.selector);
+        factory.launch(ID, _str(65), "A", "", 0, q, sig);
+        vm.expectRevert(LaunchFactory.BadParams.selector);
+        factory.launch(ID, "a", _str(17), "", 0, q, sig);
+        vm.expectRevert(LaunchFactory.BadParams.selector);
+        factory.launch(ID, "a", "A", _str(513), 0, q, sig);
+        vm.stopPrank();
+    }
+
+    function _str(uint256 n) internal pure returns (string memory) {
+        bytes memory b = new bytes(n);
+        for (uint256 i; i < n; ++i) {
+            b[i] = "a";
+        }
+        return string(b);
     }
 
     function test_holderBookOnlyWhenHoldersShare() public {

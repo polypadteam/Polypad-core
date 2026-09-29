@@ -289,8 +289,13 @@ contract AccessGovernanceTest is PolypadBase {
         assertEq(usdg.balanceOf(thief) - before, out);
         assertLt(usdg.balanceOf(thief), 10_000e6, "no hot key pulled float out");
 
-        // A cancel after it has taken effect is refused: settlement is one-way then.
+        // After the owner's cancel the keeper can no longer record one here.
         vm.prank(keeper);
+        vm.expectRevert(PriceOracle.OnlyKeeper.selector);
+        oracle.settle(ID_B, 1e6);
+
+        // A cancel after it has taken effect is refused: settlement is one-way then.
+        vm.prank(owner);
         oracle.settle(ID_B, 1e6);
         vm.warp(block.timestamp + oracle.SETTLE_DELAY());
         vm.prank(owner);
@@ -309,11 +314,16 @@ contract AccessGovernanceTest is PolypadBase {
         oracle.cancelSettle(ID);
         vm.prank(owner);
         oracle.cancelSettle(ID);
-        // Cancelled: the keeper may record the right payout.
+        // Cancelled: the keeper that recorded it may be stolen, so only the
+        // owner records the right payout now.
         vm.prank(keeper);
+        vm.expectRevert(PriceOracle.OnlyKeeper.selector);
         oracle.settle(ID, 0);
-        (uint64 recorded,) = oracle.settlement(ID);
+        vm.prank(owner);
+        oracle.settle(ID, 0);
+        (uint64 recorded, uint64 settleAt) = oracle.settlement(ID);
         assertEq(recorded, 0);
+        assertEq(settleAt, block.timestamp + oracle.SETTLE_DELAY());
     }
 
     /// Owner key: becomes oracle keeper in one call, no delay.
