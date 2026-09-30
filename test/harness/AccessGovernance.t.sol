@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {BondingCurve} from "../../src/BondingCurve.sol";
@@ -163,17 +164,12 @@ contract AccessGovernanceTest is PolypadBase {
         vm.stopPrank();
     }
 
-    function test_setMaxPriceBounds() public {
-        vm.startPrank(owner);
-        exchange.setMaxPrice(ID, 990_000);
-        vm.expectRevert(PExchange.BadParams.selector);
-        exchange.setMaxPrice(ID, 990_001);
-        uint64 floor = exchange.minPrice();
-        vm.expectRevert(PExchange.BadParams.selector);
-        exchange.setMaxPrice(ID, floor);
-        exchange.setMaxPrice(ID, 0); // reset
-        vm.stopPrank();
-        assertEq(exchange.maxPriceOf(ID), exchange.maxPrice());
+    function test_setMaxTotalRiskIsOwnerOnly() public {
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, address(this)));
+        exchange.setMaxTotalRisk(1);
+        vm.prank(owner);
+        exchange.setMaxTotalRisk(1);
+        assertEq(exchange.maxTotalRisk(), 1);
     }
 
     function test_settleFeeAndOutflowBounds() public {

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {seenOf} from "./lib/Seen.sol";
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -91,6 +92,11 @@ contract PolypadBase is Test {
         exchange.setRoles(keeper, address(factory), bridge);
         factory.setGraduator(graduator);
         factory.setFeeVault(vault);
+        // These suites were written against the v9-v11 defaults (5c..98c band,
+        // $1,000 per market) and no total cap; v12 defaults (1c..99c, $5,000 a
+        // market, $25,000 in total) are covered in test/attack/V12.t.sol.
+        exchange.setParams(25, 25, 50_000, 980_000, 1_000e6);
+        exchange.setMaxTotalRisk(type(uint256).max);
         vm.stopPrank();
 
         // A deep float so redemptions never fail for lack of USDG in these tests.
@@ -104,6 +110,14 @@ contract PolypadBase is Test {
 
         _post(ID, 600_000);
         _post(ID_B, 300_000);
+    }
+
+    /// @dev v12 has one mint ceiling for every market (the per-market override is gone).
+    function _setMaxPrice(uint64 maxPrice_) internal {
+        (uint16 b, uint16 s, uint64 lo, uint256 risk) =
+            (exchange.buySpreadBps(), exchange.sellSpreadBps(), exchange.minPrice(), exchange.defaultMaxRisk());
+        vm.prank(owner);
+        exchange.setParams(b, s, lo, maxPrice_, risk);
     }
 
     function _post(uint256 id, uint64 price) internal {
@@ -171,8 +185,9 @@ contract PolypadBase is Test {
         uint256[] memory amounts = new uint256[](1);
         ids[0] = id;
         amounts[0] = amount;
+        uint256[] memory seen1 = seenOf(exchange, ids);
         vm.prank(keeper);
-        exchange.reportBacked(ids, amounts);
+        exchange.reportBacked(ids, amounts, seen1);
     }
 
     function _pause(uint256 id) internal {
@@ -394,8 +409,7 @@ contract TradeTest is PolypadBase {
         usdg.approve(address(exchange), type(uint256).max);
 
         // 97c: ~10,283 unbacked shares risk ~$308, under $1,000.
-        vm.prank(owner);
-        exchange.setMaxPrice(ID_B, 990_000);
+        _setMaxPrice(990_000);
         vm.prank(owner);
         exchange.ensurePToken(ID_B);
         address pb = address(exchange.pTokenOf(ID_B));

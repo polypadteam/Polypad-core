@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {seenOf} from "../lib/Seen.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -140,7 +141,7 @@ contract AccessMatrixTest is PolypadBase {
         _notOwner(eve);
         exchange.setMaxRisk(ID, 1);
         _notOwner(eve);
-        exchange.setMaxPrice(ID, 990_000);
+        exchange.setMaxTotalRisk(1);
         _notOwner(eve);
         exchange.setSettleFee(0);
         _notOwner(eve);
@@ -160,7 +161,7 @@ contract AccessMatrixTest is PolypadBase {
         vm.startPrank(owner);
         exchange.setParams(25, 25, 50_000, 950_000, 2_000e6);
         exchange.setMaxRisk(ID, 1);
-        exchange.setMaxPrice(ID, 990_000);
+        exchange.setMaxTotalRisk(50_000e6);
         exchange.setSettleFee(50);
         exchange.setOutflowCap(1_000_000e6, 5_000);
         exchange.rescue(IERC20(address(stray)), owner, 1e18);
@@ -171,9 +172,10 @@ contract AccessMatrixTest is PolypadBase {
     }
 
     function test_exchange_keeperOnly() public {
+        uint256[] memory seen1 = seenOf(exchange, _ids(ID));
         vm.startPrank(eve);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
-        exchange.reportBacked(_ids(ID), _one(1));
+        exchange.reportBacked(_ids(ID), _one(1), seen1);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
         exchange.sendToBridge(1);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
@@ -182,15 +184,17 @@ contract AccessMatrixTest is PolypadBase {
         exchange.setShareLabel(ID, "Yes", "pYES");
         vm.stopPrank();
         // The owner may not report backing or move the float.
+        uint256[] memory seen2 = seenOf(exchange, _ids(ID));
         vm.startPrank(owner);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
-        exchange.reportBacked(_ids(ID), _one(1));
+        exchange.reportBacked(_ids(ID), _one(1), seen2);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
         exchange.sendToBridge(1);
         vm.stopPrank();
 
+        uint256[] memory seen3 = seenOf(exchange, _ids(ID));
         vm.startPrank(keeper);
-        exchange.reportBacked(_ids(ID), _one(1));
+        exchange.reportBacked(_ids(ID), _one(1), seen3);
         exchange.sendToBridge(1);
         exchange.setShareLabel(ID, "Yes", "pYES");
         exchange.halt();

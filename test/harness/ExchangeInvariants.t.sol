@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {seenOf} from "../lib/Seen.sol";
 import {console} from "forge-std/console.sol";
 import {PExchange} from "../../src/PExchange.sol";
 import {PToken} from "../../src/PToken.sol";
@@ -39,8 +40,9 @@ contract ExchangeInvariantsTest is PolypadBase {
         uint256[] memory amounts = new uint256[](2);
         amounts[0] = 20_000e6;
         amounts[1] = 20_000e6;
+        uint256[] memory seen1 = seenOf(exchange, ids);
         vm.prank(keeper);
-        exchange.reportBacked(ids, amounts);
+        exchange.reportBacked(ids, amounts, seen1);
 
         for (uint256 i; i < 5; ++i) {
             address a = makeAddr(string(abi.encodePacked("actor", vm.toString(i))));
@@ -175,7 +177,7 @@ contract ExchangeInvariantsTest is PolypadBase {
 
     /// @dev PExchange's `hourFloat` slot (`forge inspect PExchange storageLayout`).
     /// `hourFloat` (uint64 hour | uint96 amount | uint96 base), from `forge inspect PExchange storage-layout`.
-    uint256 internal constant HOUR_FLOAT_SLOT = 26;
+    uint256 internal constant HOUR_FLOAT_SLOT = 27;
 
     /// Within a clock hour, what left through redemptions (paid or queued) never
     /// passes the cap fixed by the hour's float snapshot. Mints add no room.
@@ -193,7 +195,7 @@ contract ExchangeInvariantsTest is PolypadBase {
         uint256 into = block.timestamp % 3_600;
         uint256 out = exchange.outflowInHour(hour) + (exchange.outflowInHour(hour - 1) * (3_600 - into)) / 3_600;
         assertEq(exchange.outflowRemaining(), out >= cap ? 0 : cap - out, "remaining != cap - outflow");
-        assertLe(exchange.outflowInHour(hour), cap);
+        assertLe(exchange.outflowInHour(hour), cap + h.ghostDustOver(hour), "hour's outflow over the cap");
     }
 
     /// Backing never exceeds supply: a report is clamped to supply, and every

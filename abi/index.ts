@@ -1057,6 +1057,25 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "burnedTotal",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "buySpreadBps",
     "inputs": [],
     "outputs": [
@@ -1295,44 +1314,6 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "maxPriceOf",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "maxPriceOverride",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "maxRisk",
     "inputs": [
       {
@@ -1360,6 +1341,19 @@ export const pExchangeAbi = [
         "internalType": "uint256"
       }
     ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxTotalRisk",
+    "inputs": [],
     "outputs": [
       {
         "name": "",
@@ -1464,6 +1458,25 @@ export const pExchangeAbi = [
       },
       {
         "name": "usdgIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "mintedSinceReport",
+    "inputs": [
+      {
+        "name": "positionId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1831,6 +1844,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "refreshRisk",
+    "inputs": [
+      {
+        "name": "ids",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "release",
     "inputs": [
       {
@@ -1860,6 +1886,11 @@ export const pExchangeAbi = [
       },
       {
         "name": "amounts",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "seen",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
@@ -1925,24 +1956,6 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
-    "name": "setMaxPrice",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxPrice_",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "setMaxRisk",
     "inputs": [
       {
@@ -1950,6 +1963,19 @@ export const pExchangeAbi = [
         "type": "uint256",
         "internalType": "uint256"
       },
+      {
+        "name": "cap",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMaxTotalRisk",
+    "inputs": [
       {
         "name": "cap",
         "type": "uint256",
@@ -2078,6 +2104,19 @@ export const pExchangeAbi = [
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalRisk",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -2313,19 +2352,13 @@ export const pExchangeAbi = [
   },
   {
     "type": "event",
-    "name": "MaxPriceSet",
+    "name": "MaxTotalRiskSet",
     "inputs": [
       {
-        "name": "positionId",
+        "name": "maxTotalRisk",
         "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxPrice",
-        "type": "uint64",
         "indexed": false,
-        "internalType": "uint64"
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -3033,19 +3066,6 @@ export const launchFactoryAbi = [
   },
   {
     "type": "function",
-    "name": "MAX_NEW_MARKETS_PER_DAY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MAX_POOL_FEE",
     "inputs": [],
     "outputs": [
@@ -3291,51 +3311,6 @@ export const launchFactoryAbi = [
   },
   {
     "type": "function",
-    "name": "newMarketsOn",
-    "inputs": [
-      {
-        "name": "day",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "newMarketsPerDay",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "openMarkets",
-    "inputs": [
-      {
-        "name": "ids",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "oracle",
     "inputs": [],
     "outputs": [
@@ -3467,19 +3442,6 @@ export const launchFactoryAbi = [
         "name": "graduator_",
         "type": "address",
         "internalType": "contract Graduator"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setNewMarketsPerDay",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -3631,19 +3593,6 @@ export const launchFactoryAbi = [
   },
   {
     "type": "event",
-    "name": "NewMarketsPerDaySet",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "OwnershipTransferStarted",
     "inputs": [
       {
@@ -3750,17 +3699,6 @@ export const launchFactoryAbi = [
       },
       {
         "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "TooManyNewMarkets",
-    "inputs": [
-      {
-        "name": "limit",
         "type": "uint256",
         "internalType": "uint256"
       }

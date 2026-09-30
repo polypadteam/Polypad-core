@@ -144,6 +144,25 @@
   },
   {
     "type": "function",
+    "name": "burnedTotal",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "buySpreadBps",
     "inputs": [],
     "outputs": [
@@ -382,44 +401,6 @@
   },
   {
     "type": "function",
-    "name": "maxPriceOf",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "maxPriceOverride",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "maxRisk",
     "inputs": [
       {
@@ -447,6 +428,19 @@
         "internalType": "uint256"
       }
     ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "maxTotalRisk",
+    "inputs": [],
     "outputs": [
       {
         "name": "",
@@ -551,6 +545,25 @@
       },
       {
         "name": "usdgIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "mintedSinceReport",
+    "inputs": [
+      {
+        "name": "positionId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -918,6 +931,19 @@
   },
   {
     "type": "function",
+    "name": "refreshRisk",
+    "inputs": [
+      {
+        "name": "ids",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "release",
     "inputs": [
       {
@@ -947,6 +973,11 @@
       },
       {
         "name": "amounts",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "seen",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
@@ -1012,24 +1043,6 @@
   },
   {
     "type": "function",
-    "name": "setMaxPrice",
-    "inputs": [
-      {
-        "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxPrice_",
-        "type": "uint64",
-        "internalType": "uint64"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "setMaxRisk",
     "inputs": [
       {
@@ -1037,6 +1050,19 @@
         "type": "uint256",
         "internalType": "uint256"
       },
+      {
+        "name": "cap",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "setMaxTotalRisk",
+    "inputs": [
       {
         "name": "cap",
         "type": "uint256",
@@ -1165,6 +1191,19 @@
         "name": "",
         "type": "uint16",
         "internalType": "uint16"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalRisk",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -1400,19 +1439,13 @@
   },
   {
     "type": "event",
-    "name": "MaxPriceSet",
+    "name": "MaxTotalRiskSet",
     "inputs": [
       {
-        "name": "positionId",
+        "name": "maxTotalRisk",
         "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxPrice",
-        "type": "uint64",
         "indexed": false,
-        "internalType": "uint64"
+        "internalType": "uint256"
       }
     ],
     "anonymous": false

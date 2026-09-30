@@ -296,9 +296,8 @@ contract ScaleTest is PolypadBase {
     /* ------------------------------------------------------ after resolution */
 
     function test_ninetyCentMarketResolvesYesAndTheCoinTradesOn() public {
-        // A near-certain market: lift the ceiling for it.
-        vm.prank(owner);
-        exchange.setMaxPrice(ID, 990_000);
+        // A near-certain market: lift the ceiling (v12: one ceiling for all markets).
+        _setMaxPrice(990_000);
         _post(ID, 970_000);
         (uint256 coins,) = _buy(alice, curve, 1_000e6);
 
@@ -329,21 +328,27 @@ contract ScaleTest is PolypadBase {
         vm.stopPrank();
     }
 
-    function test_maxPriceOverrideIsPerMarketAndCapped() public {
+    /// v12: the mint ceiling is one `setParams` value for every market; quotes
+    /// themselves stop at the oracle's 99c whatever it is set to.
+    function test_maxPriceIsOneCeilingAndQuotesStopAt99c() public {
         _post(ID, 985_000);
         (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 985_000));
         router.buy(curve, 100e6, 0, alice, q, sig);
 
-        vm.startPrank(owner);
-        vm.expectRevert(PExchange.BadParams.selector);
-        exchange.setMaxPrice(ID, 995_000);
-        exchange.setMaxPrice(ID, 990_000);
-        vm.stopPrank();
+        _setMaxPrice(995_000);
+        _post(ID, 995_000);
+        (q, sig) = signedQuote(ID, BUY);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(995_000)));
+        router.buy(curve, 100e6, 0, alice, q, sig);
+
+        _setMaxPrice(990_000);
+        _post(ID, 985_000);
+        (q, sig) = signedQuote(ID, BUY);
         vm.prank(alice);
         router.buy(curve, 100e6, 0, alice, q, sig);
-        assertEq(exchange.maxPriceOf(ID_B), exchange.maxPrice());
     }
 
     /* -------------------------------------------------------------- bursts */

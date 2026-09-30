@@ -391,7 +391,7 @@ contract ExchangeTimingTest is PolypadBase {
         assertEq(exchange.outflowRemaining(), 0);
         // v9: past the cap a sale is not refused. All of it waits.
         uint256 before = usdg.balanceOf(alice);
-        // (At least MIN_DELAYED: a smaller over-cap part reverts DustOverCap.)
+        // (At least MIN_DELAYED: a smaller over-cap part is paid at once.)
         uint256 over = _redeem(alice, ID, 2e6);
         assertEq(over, exchange.redeemOut(600_000, 2e6));
         assertEq(usdg.balanceOf(alice), before, "an over-cap sale was paid at once");
@@ -707,10 +707,10 @@ contract ExchangeTimingTest is PolypadBase {
     function test_onlyKeeperReportsBacking() public {
         vm.prank(alice);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
-        exchange.reportBacked(new uint256[](1), new uint256[](1));
+        exchange.reportBacked(new uint256[](1), new uint256[](1), new uint256[](1));
         vm.prank(keeper);
         vm.expectRevert(PExchange.BadParams.selector);
-        exchange.reportBacked(new uint256[](1), new uint256[](2));
+        exchange.reportBacked(new uint256[](1), new uint256[](1), new uint256[](2));
     }
 
     /* =============================================== 5. queue */
@@ -1015,13 +1015,12 @@ contract ExchangeTimingTest is PolypadBase {
         vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, hi + 1));
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
 
-        // Per-market override up to 99c.
+        // v12: one ceiling for every market, raised with setParams up to 99c.
+        uint256 risk = exchange.defaultMaxRisk();
         vm.startPrank(owner);
         vm.expectRevert(PExchange.BadParams.selector);
-        exchange.setMaxPrice(ID, 990_001);
-        vm.expectRevert(PExchange.BadParams.selector);
-        exchange.setMaxPrice(ID, lo);
-        exchange.setMaxPrice(ID, 990_000);
+        exchange.setParams(25, 25, lo, lo, risk);
+        exchange.setParams(25, 25, lo, 990_000, risk);
         vm.stopPrank();
         (q, sig) = _q(ID, BUY, 990_000, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
@@ -1031,11 +1030,7 @@ contract ExchangeTimingTest is PolypadBase {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(990_001)));
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
-        // The override does not leak to other markets; 0 resets.
-        assertEq(exchange.maxPriceOf(ID_B), hi);
-        vm.prank(owner);
-        exchange.setMaxPrice(ID, 0);
-        assertEq(exchange.maxPriceOf(ID), hi);
+        assertEq(exchange.maxPrice(), 990_000);
     }
 
     function test_sellsHaveNoBand() public {

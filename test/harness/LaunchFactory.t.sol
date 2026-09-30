@@ -100,14 +100,12 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         vm.prank(creator);
         vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, uint256(980_001)));
         factory.launch(ID, "a", "A", "", 0, hi, his);
-        // A per-market ceiling lifts it for that market only.
-        vm.prank(owner);
-        exchange.setMaxPrice(ID, 990_000);
+        // v12: raising the one ceiling (setParams) lifts it for every market.
+        _setMaxPrice(990_000);
         vm.prank(creator);
         factory.launch(ID, "a", "A", "", 0, hi, his);
         (hi, his) = _quote(ID_B, BUY, 980_001);
         vm.prank(creator);
-        vm.expectRevert(abi.encodeWithSelector(LaunchFactory.PriceOutOfBand.selector, uint256(980_001)));
         factory.launch(ID_B, "a", "A", "", 0, hi, his);
     }
 
@@ -372,8 +370,11 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         // Limits.
         assertEq(dEx.outflowFloor(), 5_000e6);
         assertEq(dEx.outflowFloatBps(), 5_000);
-        assertEq(dEx.maxPrice(), 980_000);
-        assertEq(dEx.defaultMaxRisk(), 1_000e6);
+        // v12 defaults: buys 1c..99c, $5,000 a market, $25,000 in total.
+        assertEq(dEx.minPrice(), 10_000);
+        assertEq(dEx.maxPrice(), 990_000);
+        assertEq(dEx.defaultMaxRisk(), 5_000e6);
+        assertEq(dEx.maxTotalRisk(), 25_000e6);
         assertFalse(dEx.halted());
     }
 

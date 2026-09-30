@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+import {seenOf} from "../lib/Seen.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {PExchange} from "../../src/PExchange.sol";
@@ -43,6 +44,8 @@ contract ExchangeHandler is Test {
     mapping(uint256 => uint256) public ghostBurned;
     /// Set if a redemption paid (or queued) more at once than the cap had left.
     bool public ghostOverCap;
+    /// v12: USDG paid past the cap because the part over it was under MIN_DELAYED, per hour.
+    mapping(uint256 hour => uint256) public ghostDustOver;
     /// Set if `absorb` burned shares held for a delayed sale.
     bool public ghostAbsorbedDelayed;
 
@@ -179,7 +182,12 @@ contract ExchangeHandler is Test {
                 pLater = pAmount;
                 _hit("delayed");
             }
-            if (out - later > remaining) ghostOverCap = true;
+            if (out - later > remaining) {
+                // v12: under MIN_DELAYED over the cap is paid at once; more never is.
+                uint256 over = out - later - remaining;
+                if (over >= exchange.MIN_DELAYED()) ghostOverCap = true;
+                ghostDustOver[block.timestamp / 3_600] += over;
+            }
             ghostOwed += out - later;
             ghostDelayed += later;
             ghostBurned[m] += amount - pLater;
@@ -338,8 +346,9 @@ contract ExchangeHandler is Test {
         uint256[] memory a1 = new uint256[](1);
         i1[0] = ids[m];
         a1[0] = bound(amount, 0, 100_000e6);
+        uint256[] memory seen1 = seenOf(exchange, i1);
         vm.prank(keeper);
-        exchange.reportBacked(i1, a1);
+        exchange.reportBacked(i1, a1, seen1);
     }
 
     function pause(uint256 m, uint256 seed) external {

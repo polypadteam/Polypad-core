@@ -37,7 +37,7 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
   by anyone who sees Polymarket move first. `Router.sellForShares` and trades
   on a settled market need no quote.
 - **Settlement.** The keeper records each market's payout from Polymarket's
-  on-chain result; it takes effect six hours later (`SETTLE_DELAY`), and the owner
+  on-chain result; it takes effect an hour later (`SETTLE_DELAY`), and the owner
   can cancel a wrong one meanwhile, so one hot key cannot settle a market at $1
   and redeem the float.
 

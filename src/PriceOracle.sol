@@ -76,9 +76,10 @@ contract PriceOracle is Ownable2Step, EIP712 {
     uint256 public constant ACCEPT_WINDOW = 7 days;
     /// @notice A settlement takes effect this long after the keeper records it,
     ///         and the owner can cancel it meanwhile: one stolen keeper key cannot
-    ///         settle a cheap market at $1 and redeem the float out of it. Long
-    ///         enough for an owner whose key is kept offline to be reached.
-    uint256 public constant SETTLE_DELAY = 6 hours;
+    ///         settle a cheap market at $1 and redeem the float out of it.
+    ///         Holders can sell at the quote meanwhile; only those holding for
+    ///         the payout wait.
+    uint256 public constant SETTLE_DELAY = 1 hours;
 
     /// @notice Signs quotes off chain. Holds no funds.
     address public signer;

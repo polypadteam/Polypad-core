@@ -53,19 +53,6 @@
   },
   {
     "type": "function",
-    "name": "MAX_NEW_MARKETS_PER_DAY",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MAX_POOL_FEE",
     "inputs": [],
     "outputs": [
@@ -311,51 +298,6 @@
   },
   {
     "type": "function",
-    "name": "newMarketsOn",
-    "inputs": [
-      {
-        "name": "day",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "newMarketsPerDay",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "openMarkets",
-    "inputs": [
-      {
-        "name": "ids",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "oracle",
     "inputs": [],
     "outputs": [
@@ -487,19 +429,6 @@
         "name": "graduator_",
         "type": "address",
         "internalType": "contract Graduator"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setNewMarketsPerDay",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -651,19 +580,6 @@
   },
   {
     "type": "event",
-    "name": "NewMarketsPerDaySet",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "OwnershipTransferStarted",
     "inputs": [
       {
@@ -770,17 +686,6 @@
       },
       {
         "name": "positionId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "TooManyNewMarkets",
-    "inputs": [
-      {
-        "name": "limit",
         "type": "uint256",
         "internalType": "uint256"
       }
