@@ -43,16 +43,17 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 
 ### Safety
 
-- Unbacked pToken per market is capped in dollars at risk (unbacked shares x
-  (1 − price), $1,000 by default) until the desk reports the real shares. Buys
-  are priced 5¢–98¢ (one market's ceiling can be lifted to 99¢).
-- USDG leaving through redemptions is metered per hour: the larger of $5,000
-  and 50% of the float as the hour began. The part of a sale over it is held
-  at its price and paid an hour later; the owner can cancel it meanwhile (the
-  pToken goes back). The keeper can halt the exchange (mints, redeems, releases
+- Buys are priced 0.1¢–99.9¢ at a quote signed from the live Polymarket book;
+  the desk buys the matching shares. Unbacked risk is tracked per market and
+  in total (`unbackedRisk`, `totalRisk`) with owner-set caps (off at launch).
+- Payouts of settled markets are metered per hour: the larger of $25,000 and
+  50% of the float as the hour began. The part over it is held at its price
+  and paid an hour later; the owner can cancel it meanwhile (the pToken goes
+  back). Sales at a quote are metered the same way only while the owner turns
+  `meterSales` on. The keeper can halt the exchange (mints, redeems, releases
   and queue payments), only the owner resumes it.
-- A new signer or bridge address takes effect only after 2 days; revoking the
-  signer is immediate.
+- A new signer takes effect only after 12 hours, a new bridge address after 2
+  days; revoking the signer is immediate.
 - `rescue` can never move the float or a pToken.
 - Selling always works while a market is live, including after buys pause before
   the end date. After resolution, pTokens pay the market's payout.
