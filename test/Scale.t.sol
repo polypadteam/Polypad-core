@@ -337,14 +337,14 @@ contract ScaleTest is PolypadBase {
         vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, 985_000));
         router.buy(curve, 100e6, 0, alice, q, sig);
 
-        _setMaxPrice(995_000);
-        _post(ID, 995_000);
+        _setMaxPrice(999_500);
+        _post(ID, 999_500);
         (q, sig) = signedQuote(ID, BUY);
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(995_000)));
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(999_500)));
         router.buy(curve, 100e6, 0, alice, q, sig);
 
-        _setMaxPrice(990_000);
+        _setMaxPrice(999_000);
         _post(ID, 985_000);
         (q, sig) = signedQuote(ID, BUY);
         vm.prank(alice);

@@ -110,8 +110,12 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     uint16 public buySpreadBps = 25;
     uint16 public sellSpreadBps = 25;
-    uint64 public minPrice = 10_000; // 1c
-    uint64 public maxPrice = 990_000; // 99c
+    uint64 public minPrice = 1_000; // 0.1c
+    uint64 public maxPrice = 999_000; // 99.9c
+    /// @notice Whether sales at a quote count against the hourly cap too. Payouts
+    ///         of settled markets always do. Off in deployment (sales are never
+    ///         held back); the owner turns it on to slow a stolen signing key.
+    bool public meterSales = true;
     /// @notice USDG a market's unbacked supply may lose if its price went to $1
     ///         (unbacked x (1 - price)), unless overridden. 6 decimals.
     uint256 public defaultMaxRisk = 5_000e6;
@@ -216,6 +220,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     event BridgeDepositProposed(address indexed bridgeDeposit, uint256 effectiveAt);
     event Rescued(address indexed token, address indexed to, uint256 amount);
     event OutflowCapSet(uint256 floor, uint256 floatBps);
+    event MeterSalesSet(bool on);
     event SaleDelayed(
         uint256 indexed ticket,
         uint256 indexed positionId,
@@ -328,7 +333,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         (uint256 id, PToken p) = _market(pToken);
         (, bool settled, uint64 payout) = oracle.status(id);
         uint64 price = settled ? payout : _quoted(id, amountIn, q, sig, oracle.SELL());
-        out = _redeem(id, p, amountIn, minOut, to, price, settled ? settleFeeBps : sellSpreadBps);
+        out = _redeem(id, p, amountIn, minOut, to, price, settled);
     }
 
     /**
@@ -517,7 +522,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         uint64 maxPrice_,
         uint256 defaultMaxRisk_
     ) external onlyOwner {
-        if (buySpreadBps_ > 500 || sellSpreadBps_ > 500 || minPrice_ >= maxPrice_ || maxPrice_ >= ONE) {
+        if (buySpreadBps_ > 500 || sellSpreadBps_ > 500 || minPrice_ < 1_000 || minPrice_ >= maxPrice_ || maxPrice_ >= ONE) {
             revert BadParams();
         }
         buySpreadBps = buySpreadBps_;
@@ -550,6 +555,11 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         if (settleFeeBps_ > 200) revert BadParams();
         settleFeeBps = settleFeeBps_;
         emit SettleFeeSet(settleFeeBps_);
+    }
+
+    function setMeterSales(bool on) external onlyOwner {
+        meterSales = on;
+        emit MeterSalesSet(on);
     }
 
     /// @notice The hourly redemption cap: `floatBps` of the float, never below `floor`.
@@ -765,14 +775,14 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         if (queued > 0) _payQueue(3);
     }
 
-    function _redeem(uint256 id, PToken p, uint256 amountIn, uint256 minOut, address to, uint64 price, uint16 spreadBps)
+    function _redeem(uint256 id, PToken p, uint256 amountIn, uint256 minOut, address to, uint64 price, bool settled)
         internal
         returns (uint256 out)
     {
         if (halted) revert Halted();
         if (to == address(0)) revert BadParams();
         _markHour();
-        out = _redeemOut(price, amountIn, spreadBps);
+        out = _redeemOut(price, amountIn, settled ? settleFeeBps : sellSpreadBps);
         if (out < minOut) revert Slippage(out, minOut);
         emit Redeemed(id, to, amountIn, out, price);
         if (out == 0) {
@@ -780,7 +790,13 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
             _burned(id, amountIn);
             return 0;
         }
-        uint256 remaining = outflowRemaining();
+        // Payouts of settled markets are always metered: a settlement recorded
+        // by a stolen keeper key and missed by the owner would otherwise pay
+        // the whole float in one transaction; metered, the part over the hour's
+        // budget waits as a ticket the owner can still cancel. Sales at a quote
+        // are metered only while `meterSales` is on.
+        bool metered = settled || meterSales;
+        uint256 remaining = metered ? outflowRemaining() : out;
         uint256 now_ = out <= remaining ? out : remaining;
         // Dust tickets would only flood the release scan and the alert: less than
         // MIN_DELAYED over the cap is paid now if the cap was not yet spent (so
@@ -789,7 +805,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
             if (now_ == 0) revert DustOverCap(out);
             now_ = out;
         }
-        outflowInHour[block.timestamp / 3_600] += now_;
+        if (metered) outflowInHour[block.timestamp / 3_600] += now_;
         // The part over the cap waits: its pToken is held here, its price fixed.
         uint256 pLater = now_ < out ? (amountIn * (out - now_)) / out : 0;
         p.burn(msg.sender, amountIn);

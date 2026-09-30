@@ -27,12 +27,12 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0x22AB2e68CD2ef4e43e63f45287048684b3666928` | Creates coins; emits `Launched` |
-| Router | `0x05dFE6841A53dCF7f3f786394E49952DAeaC6EAC` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x60E536423EfFa270d4C749610e1861835DDD35f3` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0x2E01cf4Ce87366a6AC33cc8653d5071C55dDAdc4` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0x157f51044B280C9f5F45F55ADD10D1413bB66000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
-| FeeVault | `0x6B5779be61cE88f10F6046dCd03FDBafB2739852` | Creator fees and holder dividends |
+| LaunchFactory | `0xbfbda9E51Fd6ECeB92E91f4A9ef334fA61092835` | Creates coins; emits `Launched` |
+| Router | `0xb322ba4e11515D606AfD65d05d6A9d26484d5985` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0x57DFCccCD3c6fE7380020CE5eF601D2DD504df77` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0xD2CBb67E1761c983d4a8498804872655D851d4B0` | Verifies signed prices, posts on-chain prices |
+| Graduator | `0x9915cFa0819F150DDB0d542204A30c5f8b68E000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| FeeVault | `0x545d3F4aE79eA19940a4a899D909fB6169FB3e97` | Creator fees and holder dividends |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
@@ -263,13 +263,21 @@ GET https://api.polypad.trade/v1/swap
 }
 ```
 
-Send `approval` first when present, then `tx`, within `validUntil` (about 10
-seconds). Errors come back as `{"error": "..."}` with HTTP 4xx: the market is
-paused before its end date, the trade is too large for the Polymarket book, the
-odds are moving fast, and so on.
+Send `approval` first when present, then `tx`, before `validUntil` (unix
+seconds). A quote lives between 3 and 15 seconds depending on the market and
+how fast its odds are moving: always read `validUntil` rather than assuming a
+fixed window. Errors come back as `{"error": "..."}` with HTTP 4xx: the market
+is paused before its end date, the trade is too large for the Polymarket book,
+the odds are moving fast, and so on.
 
-Selling a coin always works, including after buys pause for the market's end
-date. After the market resolves YES the coin keeps trading both ways: the
+A signed quote is not tied to the taker it was requested for: whoever holds
+the quote and signature can use it until `validUntil` (the `tx` itself pays
+`to` the taker you named). Do not share them.
+
+Selling a coin for USDG can be refused for a moment (HTTP 422) when the odds
+jump fast or the Polymarket book is one-sided (no bids near the price): retry
+after a few seconds, or sell for shares (`receive=shares`), which needs no
+quote. Selling is never paused for the market's end date. After the market resolves YES the coin keeps trading both ways: the
 pToken is then worth $1 and mints and redeems at $1 with no quote needed
 (0.25% in, 0.5% out); after NO it is worth $0 and only sells remain.
 
@@ -284,6 +292,23 @@ price and paid an hour later (`SaleDelayed(ticket, positionId, to, pAmount,
 amount, readyAt)`, then `Released(ticket)`; anyone may call
 `PExchange.release(ticket)` once `readyAt` passes, and our keeper does).
 
+### Rate limits
+
+Per client address, per API machine: 20 requests a second (burst 60) for
+everything. Requests that make us sign a quote (`/v1/swap`, `/v1/launch`, and
+`/v1/claim?usd=1`) also count against a tighter 2 a second (burst 10); use
+`/v1/quote` (unsigned, same prices) to show prices while a user types. Past a
+limit the answer is HTTP 429 `{"error": "..."}`: back off and retry.
+
+Integrators with an API key (send it as `x-api-key`; ask us for one) get their
+own budget of 200 requests a second (burst 600) per key, signed quotes
+included, instead of the per-address limits.
+
+Streams: up to 40 SSE streams and 10 websockets per address, opened at most
+about one a second once past a burst. A websocket may send about 10 messages a
+second (subscribe / unsubscribe; burst 30); past that it is closed with code
+1008.
+
 ## Live data and charts
 
 **Candles** (dollar OHLCV, the price moves with trades and with the odds):
@@ -296,7 +321,10 @@ GET /v1/coins/<coin>/candles?tf=1m&from=<unix s>&to=<unix s>   history (at most 
 `GET /v1/coins/<coin>` lists the `timeframes` worth showing at the coin's age
 (1s always; 1m, 5m, 1h, 1d once the coin has lived five of their candles).
 Closed history windows never change and are served with an immutable cache
-header; the latest window refreshes about once per candle second.
+header; the latest window refreshes about once per candle second (hourly and
+daily candles about once a minute: update the forming candle from `price`
+events). Paging back through history is cached best when each page is 300 or
+1,500 candles starting at a multiple of the page length.
 
 **Streaming**, either transport, same events:
 
@@ -319,12 +347,30 @@ each new coin, curve and pToken within minutes of its launch.
 
 ## Coin metadata
 
-`Coin.metadataURI()` points to a JSON document in the pump.fun style:
+`Coin.metadataURI()` points to a JSON document in the pump.fun style. Coins
+launched through our site or `/v1/launch` store it on our API, addressed by
+the SHA-256 of its content (so a URI never changes meaning):
+
+```
+https://api.polypad.trade/v1/metadata/<sha256 hex>          the JSON
+https://api.polypad.trade/v1/metadata/<sha256 hex>/image    the image (png, jpeg, gif or webp, up to 1 MB)
+```
 
 ```json
-{ "name": "...", "symbol": "...", "image": "ipfs://...", "description": "...",
-  "twitter": "...", "telegram": "...", "website": "..." }
+{ "name": "...", "symbol": "...", "image": "https://api.polypad.trade/v1/metadata/<hash>/image",
+  "description": "...", "twitter": "...", "telegram": "...", "website": "..." }
 ```
+
+Store your own with `POST /v1/metadata` (JSON body `{name, symbol,
+description?, image?: "data:image/png;base64,...", twitter?, telegram?,
+website?}`; returns `{uri, hash}`; up to 30 uploads an hour and 20 MB a day per
+address; the same content again returns the same URI and costs nothing).
+
+The URI is whatever the launcher passed on chain and is not checked there:
+treat it, and the name and symbol, as untrusted. Our site only fetches our own
+`/v1/metadata/` URIs and `ipfs://` ones, and `GET /v1/coins/<coin>` returns
+`image` only for metadata stored on our API and replaces a `symbol` that is not
+1-10 letters, digits or `$` with the shortened coin address.
 
 `GET /v1/coins/<coin>` also returns the Polymarket market (question, outcome,
 end date, odds) for display.

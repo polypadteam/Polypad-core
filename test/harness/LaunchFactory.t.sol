@@ -371,8 +371,8 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         assertEq(dEx.outflowFloor(), 5_000e6);
         assertEq(dEx.outflowFloatBps(), 5_000);
         // v12 defaults: buys 1c..99c, $5,000 a market, $25,000 in total.
-        assertEq(dEx.minPrice(), 10_000);
-        assertEq(dEx.maxPrice(), 990_000);
+        assertEq(dEx.minPrice(), 1_000);
+        assertEq(dEx.maxPrice(), 999_000);
         assertEq(dEx.defaultMaxRisk(), 5_000e6);
         assertEq(dEx.maxTotalRisk(), 25_000e6);
         assertFalse(dEx.halted());

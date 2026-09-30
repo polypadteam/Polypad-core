@@ -1015,32 +1015,32 @@ contract ExchangeTimingTest is PolypadBase {
         vm.expectRevert(abi.encodeWithSelector(PExchange.PriceOutOfBand.selector, hi + 1));
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
 
-        // v12: one ceiling for every market, raised with setParams up to 99c.
+        // v12: one ceiling for every market, raised with setParams up to 99.9c.
         uint256 risk = exchange.defaultMaxRisk();
         vm.startPrank(owner);
         vm.expectRevert(PExchange.BadParams.selector);
         exchange.setParams(25, 25, lo, lo, risk);
-        exchange.setParams(25, 25, lo, 990_000, risk);
+        exchange.setParams(25, 25, lo, 999_000, risk);
         vm.stopPrank();
-        (q, sig) = _q(ID, BUY, 990_000, 1e12, uint64(block.timestamp + 15));
+        (q, sig) = _q(ID, BUY, 999_000, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
-        // Past 99c the oracle refuses the quote before the band is checked.
-        (q, sig) = _q(ID, BUY, 990_001, 1e12, uint64(block.timestamp + 15));
+        // Past 99.9c the oracle refuses the quote before the band is checked.
+        (q, sig) = _q(ID, BUY, 999_001, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(990_001)));
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(999_001)));
         exchange.mint(address(pA), 10e6, 0, alice, q, sig);
-        assertEq(exchange.maxPrice(), 990_000);
+        assertEq(exchange.maxPrice(), 999_000);
     }
 
     function test_sellsHaveNoBand() public {
         uint256 s = _mint(alice, ID, 100e6);
-        // No exchange band on sells; the oracle's MAX_PRICE (99c) is the ceiling.
-        (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, SELL, 990_001, 1e12, uint64(block.timestamp + 15));
+        // No exchange band on sells; the oracle's MAX_PRICE (99.9c) is the ceiling.
+        (PriceOracle.Quote memory q, bytes memory sig) = _q(ID, SELL, 999_001, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(990_001)));
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.PriceOutOfRange.selector, ID, uint64(999_001)));
         exchange.redeem(address(pA), s / 2, 0, alice, q, sig);
-        (q, sig) = _q(ID, SELL, 990_000, 1e12, uint64(block.timestamp + 15));
+        (q, sig) = _q(ID, SELL, 999_000, 1e12, uint64(block.timestamp + 15));
         vm.prank(alice);
         exchange.redeem(address(pA), s / 2, 0, alice, q, sig);
         (q, sig) = _q(ID, SELL, 1, 1e12, uint64(block.timestamp + 15));

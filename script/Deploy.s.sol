@@ -39,6 +39,8 @@ contract DevUSDG is ERC20 {
  *   POOL_MANAGER     Uniswap v4 PoolManager (default: Robinhood Chain's)
  *   OUTFLOW_FLOOR    hourly redemption cap floor in USDG units (default 5,000e6)
  *   OUTFLOW_FLOAT_BPS  hourly redemption cap as bps of the float (default 5,000 = 50%, at most 10,000)
+ *   METER_SALES      whether sales at a quote count against the hourly cap (default true;
+ *                    payouts of settled markets always do)
  *   DEPLOY_OUT       output path (default deployments/<chainid>.json; set it for local runs)
  *
  *   NEW_OWNER        optional: the offline owner wallet. Ownership of the oracle,
@@ -127,6 +129,7 @@ contract Deploy is Script {
         o.exchange.setRoles(keeper, address(o.factory), vm.envOr("BRIDGE_DEPOSIT", address(0)));
         o.exchange
             .setOutflowCap(vm.envOr("OUTFLOW_FLOOR", uint256(5_000e6)), vm.envOr("OUTFLOW_FLOAT_BPS", uint256(5_000)));
+        if (!vm.envOr("METER_SALES", true)) o.exchange.setMeterSales(false);
         uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
         if (gradUsd != 6_000e6) o.factory.setConfig(platform, gradUsd);
         address newOwner = vm.envOr("NEW_OWNER", address(0));

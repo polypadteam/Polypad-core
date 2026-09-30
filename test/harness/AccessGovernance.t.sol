@@ -27,7 +27,7 @@ contract AccessGovernanceTest is PolypadBase {
         vm.prank(owner);
         oracle.setSigner(eve);
         uint256 at = oracle.pendingSignerAt();
-        assertEq(at, block.timestamp + 2 days);
+        assertEq(at, block.timestamp + 12 hours);
         vm.warp(at - 1);
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(PriceOracle.NotYet.selector, at));
@@ -152,7 +152,10 @@ contract AccessGovernanceTest is PolypadBase {
 
     function test_setParamsBounds() public {
         vm.startPrank(owner);
-        exchange.setParams(500, 500, 1, 999_999, 0);
+        exchange.setParams(500, 500, 1_000, 999_999, 0);
+        // Under 0.1c the buy spread's rounding alone could reach 100%.
+        vm.expectRevert(PExchange.BadParams.selector);
+        exchange.setParams(25, 25, 999, 950_000, 0);
         vm.expectRevert(PExchange.BadParams.selector);
         exchange.setParams(501, 25, 50_000, 950_000, 0);
         vm.expectRevert(PExchange.BadParams.selector);

@@ -1365,6 +1365,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "meterSales",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "minPrice",
     "inputs": [],
     "outputs": [
@@ -1987,6 +2000,19 @@ export const pExchangeAbi = [
   },
   {
     "type": "function",
+    "name": "setMeterSales",
+    "inputs": [
+      {
+        "name": "on",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setOutflowCap",
     "inputs": [
       {
@@ -2359,6 +2385,19 @@ export const pExchangeAbi = [
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MeterSalesSet",
+    "inputs": [
+      {
+        "name": "on",
+        "type": "bool",
+        "indexed": false,
+        "internalType": "bool"
       }
     ],
     "anonymous": false

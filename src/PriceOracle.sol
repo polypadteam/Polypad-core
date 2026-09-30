@@ -29,16 +29,17 @@ import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
  * before a market's end date. `settle` records the final payout once the market
  * resolves on Polygon; it is one-way, and a settled market ignores quotes.
  *
- * No quote may price a share above `MAX_PRICE` (99c), on either side: a sale
- * signed near $1 by a stolen key would pay out almost a dollar for a share the
- * desk may never have held.
+ * No quote may price a share above `MAX_PRICE` (99.9c), on either side: a sale
+ * signed at $1 by a stolen key would pay out a full dollar for a share the desk
+ * may never have held. Polymarket trades in 0.1c steps near the ends, so a
+ * market asking 99.1c-99.9c before it resolves still takes buys.
  */
 contract PriceOracle is Ownable2Step, EIP712 {
     uint64 public constant ONE = 1e6;
     /// @notice Longest a quote may be valid for, whatever the signer wrote.
     uint64 public constant MAX_VALIDITY = 30;
     /// @notice Highest price any quote may carry.
-    uint64 public constant MAX_PRICE = 990_000;
+    uint64 public constant MAX_PRICE = 999_000;
 
     uint8 public constant BUY = 0;
     uint8 public constant SELL = 1;
@@ -70,7 +71,7 @@ contract PriceOracle is Ownable2Step, EIP712 {
     mapping(uint256 positionId => Status) internal statuses;
 
     /// @notice Delay before a new signer takes effect. Revoking (zero) is immediate.
-    uint256 public constant ROLE_DELAY = 2 days;
+    uint256 public constant ROLE_DELAY = 12 hours;
     /// @notice A proposed signer must be accepted within this long after `ROLE_DELAY`,
     ///         so a forgotten proposal cannot be accepted months later.
     uint256 public constant ACCEPT_WINDOW = 7 days;

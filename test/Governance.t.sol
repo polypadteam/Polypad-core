@@ -12,16 +12,16 @@ import {MockUSDG, PolypadBase} from "./Polypad.t.sol";
 contract GovernanceTest is PolypadBase {
     address internal newSigner = makeAddr("newSigner");
 
-    function test_aNewSignerWaitsTwoDays() public {
+    function test_aNewSignerWaitsTwelveHours() public {
         vm.prank(owner);
         oracle.setSigner(newSigner);
         assertEq(oracle.signer(), signer, "old signer still in charge");
 
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(PriceOracle.NotYet.selector, block.timestamp + 2 days));
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.NotYet.selector, block.timestamp + 12 hours));
         oracle.acceptSigner();
 
-        vm.warp(block.timestamp + 2 days);
+        vm.warp(block.timestamp + 12 hours);
         vm.prank(owner);
         oracle.acceptSigner();
         assertEq(oracle.signer(), newSigner);
