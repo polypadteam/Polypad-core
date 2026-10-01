@@ -46,7 +46,7 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 - Buys are priced 0.1¢–99.9¢ at a quote signed from the live Polymarket book;
   the desk buys the matching shares. Unbacked risk is tracked per market and
   in total (`unbackedRisk`, `totalRisk`) with owner-set caps (off at launch).
-- Payouts of settled markets are metered per hour: the larger of $25,000 and
+- Payouts of settled markets are metered per hour: the larger of $100,000 and
   50% of the float as the hour began. The part over it is held at its price
   and paid an hour later; the owner can cancel it meanwhile (the pToken goes
   back). Sales at a quote are metered the same way only while the owner turns
