@@ -1,0 +1,51 @@
+[package]
+name = "polypad_launch"
+version = "0.1.0"
+description = "Polypad launch: coins on Meteora DBC quoted in pTokens, and the fee vault (Solana port of LaunchFactory + FeeVault)"
+edition.workspace = true
+rust-version.workspace = true
+license = "BUSL-1.1"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "polypad_launch"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "polypad_exchange/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+# Quotes carry the cluster byte: build both programs with the same setting.
+mainnet = ["polypad_exchange/mainnet"]
+
+[dependencies]
+anchor-lang = { version = "1.2.1", features = ["event-cpi", "init-if-needed"] }
+anchor-spl = { version = "1.2.1", default-features = false, features = ["token", "associated_token", "solana-v3"] }
+polypad_exchange = { path = "../polypad_exchange", features = ["cpi"] }
+bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
+ruint = { version = "=1.14.0", default-features = false }
+solana-sdk-ids = "3.1.0"
+
+[dev-dependencies]
+base64 = "0.22"
+bincode = "1.3.3"
+bs58 = "0.5"
+ed25519-dalek = "2"
+litesvm = { version = "0.18.0", features = ["precompiles"] }
+serde_json = "1"
+solana-account = "4"
+solana-clock = "3.2.1"
+solana-compute-budget-interface = "3.1.0"
+solana-instruction-error = "2"
+solana-keypair = "3.1.2"
+solana-message = "4"
+solana-signer = "3.0.1"
+solana-transaction = { version = "4.1.5", features = ["serde"] }
+solana-transaction-error = "3"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

@@ -50,7 +50,10 @@ import {PriceOracle} from "./PriceOracle.sol";
  * ## After settlement
  *
  * A market that settled with a payout keeps trading: mints need no quote and
- * cost the payout plus the buy spread. Those pTokens are backed by the USDG
+ * cost the payout plus the buy spread. So does one whose $1 payout is recorded
+ * and still inside its SETTLE_DELAY: a share sold at $1 can cost the float
+ * nothing whatever the outcome, so buying never waits for the delay (a
+ * cancelled $1 settlement leaves the buyer holding a share bought at $1). Those pTokens are backed by the USDG
  * paid for them, which stays in the float, so no shares are bought. A coin on a
  * market that resolved YES becomes a coin paired with a $1 token and trades on.
  *
@@ -310,8 +313,10 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     ) external nonReentrant returns (uint256 out) {
         if (usdgIn == 0) revert ZeroAmount();
         (uint256 id, PToken p) = _market(pToken);
-        (, bool settled, uint64 payout) = oracle.status(id);
-        if (settled) return _mintSettled(id, p, usdgIn, minOut, to, payout);
+        {
+            (bool atPayout, bool final_, uint64 payout) = _payoutMint(id);
+            if (atPayout) return _mintSettled(id, p, usdgIn, minOut, to, payout, final_);
+        }
         uint64 price = _quoted(id, usdgIn, q, sig, oracle.BUY());
         out = _mint(id, p, usdgIn, minOut, to, price, buySpreadBps);
     }
@@ -755,9 +760,22 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         unbackedRisk[id] = (high << 192) | (low << 128) | SafeCast.toUint128(risk);
     }
 
+    /// @dev Whether a mint is at a payout instead of a quote: settled (`final_`),
+    ///      or a $1 payout recorded and still inside its delay.
+    function _payoutMint(uint256 id) internal view returns (bool atPayout, bool final_, uint64 payout) {
+        bool settled;
+        (, settled, payout) = oracle.status(id);
+        if (settled) return (true, true, payout);
+        (uint64 pending, uint64 settleAt) = oracle.settlement(id);
+        if (settleAt != 0 && pending == ONE) return (true, false, pending);
+        return (false, false, 0);
+    }
+
     /// @dev A settled market mints at the payout plus the buy spread. The USDG stays
     ///      here and is the backing, so there is no band and no unbacked cap.
-    function _mintSettled(uint256 id, PToken p, uint256 usdgIn, uint256 minOut, address to, uint64 payout)
+    ///      `final` false: a $1 payout still inside its delay. A share at $1 adds
+    ///      no risk, and the market's stored risk is kept in case it is cancelled.
+    function _mintSettled(uint256 id, PToken p, uint256 usdgIn, uint256 minOut, address to, uint64 payout, bool final_)
         internal
         returns (uint256 out)
     {
@@ -770,7 +788,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         if (out < minOut) revert Slippage(out, minOut);
         usdg.safeTransferFrom(msg.sender, address(this), usdgIn);
         p.mint(to, out);
-        _storeRisk(id, 0, 0, 0);
+        if (final_) _storeRisk(id, 0, 0, 0);
         emit Minted(id, to, usdgIn, out, payout);
         if (queued > 0) _payQueue(3);
     }

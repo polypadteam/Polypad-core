@@ -1,0 +1,20 @@
+[toolchain]
+anchor_version = "1.2.1"
+solana_version = "4.3.0"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+polypad_exchange = "3SzMv182JofB9Li4xjhqT5s283kwv8TbTgJWych6hDAd"
+polypad_launch = "GDe9PRUW6Tq2McNSLTfXMETk4PgjHhyCYm3JvneKxLzn"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]

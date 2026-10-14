@@ -461,6 +461,55 @@ contract TradeTest is PolypadBase {
         router.buy(curve, 100e6, 0, bob, none, "");
     }
 
+    /// A recorded $1 payout reopens buying at $1 at once, quote-free, without
+    /// waiting for SETTLE_DELAY; anything else waits.
+    function test_pendingDollarSettlementMintsAtOneDollar() public {
+        _buy(alice, curve, 600e6);
+        vm.prank(keeper);
+        oracle.settle(ID, 1e6);
+        (, bool settled,) = oracle.status(ID);
+        assertFalse(settled);
+
+        PriceOracle.Quote memory none;
+        uint256 supply = p.totalSupply();
+        vm.prank(bob);
+        router.buy(curve, 100e6, 0, bob, none, "");
+        // $100 less the 0.25% spread buys about 99.75 shares at $1.
+        assertApproxEqAbs(p.totalSupply() - supply, 99_750_000, 1_000);
+    }
+
+    function test_pendingPartialSettlementWaitsForTheDelay() public {
+        _buy(alice, curve, 600e6);
+        vm.prank(keeper);
+        oracle.settle(ID, 500_000);
+        (PriceOracle.Quote memory q, bytes memory sig) = signedQuote(ID, BUY);
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(PriceOracle.MarketPaused.selector, ID));
+        router.buy(curve, 100e6, 0, bob, q, sig);
+    }
+
+    function test_pendingDollarMintStopsOnHaltAndAfterCancel() public {
+        _buy(alice, curve, 600e6);
+        vm.prank(keeper);
+        oracle.settle(ID, 1e6);
+        PriceOracle.Quote memory none;
+
+        vm.prank(keeper);
+        exchange.halt();
+        vm.prank(bob);
+        vm.expectRevert(PExchange.Halted.selector);
+        router.buy(curve, 100e6, 0, bob, none, "");
+        vm.prank(owner);
+        exchange.resume();
+
+        vm.prank(owner);
+        oracle.cancelSettle(ID);
+        // Back to quoted buys: no quote, no mint.
+        vm.prank(bob);
+        vm.expectRevert();
+        router.buy(curve, 100e6, 0, bob, none, "");
+    }
+
     function test_absorbBurnsPTokenSentToTheExchange() public {
         _buy(alice, curve, 600e6);
         vm.startPrank(creator);

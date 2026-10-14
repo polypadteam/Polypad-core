@@ -1,0 +1,4323 @@
+{
+  "address": "GDe9PRUW6Tq2McNSLTfXMETk4PgjHhyCYm3JvneKxLzn",
+  "metadata": {
+    "name": "polypad_launch",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Polypad launch: coins on Meteora DBC quoted in pTokens, and the fee vault (Solana port of LaunchFactory + FeeVault)"
+  },
+  "instructions": [
+    {
+      "name": "accept_ownership",
+      "discriminator": [
+        172,
+        23,
+        43,
+        13,
+        238,
+        213,
+        85,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "pending_owner",
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "accept_payee",
+      "docs": [
+        "The proposed payee accepts. Fees already owed stay with the old",
+        "payee (they are owed per payee, as on the EVM); new ones are theirs."
+      ],
+      "discriminator": [
+        54,
+        121,
+        126,
+        241,
+        86,
+        182,
+        192,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch.base_mint",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "burn_leftover",
+      "docs": [
+        "Burn the coins in the vault's coin account: DBC's leftover above the",
+        "burn cap (sent here by its permissionless `withdraw_leftover`). The",
+        "EVM sends its unsold remainder to DEAD; here supply really drops.",
+        "Graduated coins only: DBC sends a leftover only after migration, and",
+        "a coin that graduated had its record before its mint existed, so",
+        "the sweeps (which refuse a mint with a record) never left the",
+        "platform owed anything in it. A record made later for a mint that",
+        "already existed (a look-alike pool's) never graduates, so what the",
+        "platform is owed in that mint is never burned."
+      ],
+      "discriminator": [
+        58,
+        137,
+        245,
+        55,
+        2,
+        29,
+        142,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch.base_mint",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "writable": true
+        },
+        {
+          "name": "vault_coin",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "collect",
+      "docs": [
+        "`Graduator.collect` and the curve's `_payFee` together: claim the",
+        "coin's pToken fees from its DBC pool and, once graduated, from its",
+        "locked DAMM v2 position; split each by the coin's creator share;",
+        "credit the payee and the platform, and keep the holders' part on the",
+        "record. Only this collect's balance change counts, so other coins'",
+        "fees in the shared vault account and donations are never touched."
+      ],
+      "discriminator": [
+        208,
+        47,
+        194,
+        155,
+        17,
+        98,
+        82,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Pays the rent of any fee account created here."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch.base_mint",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint"
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "vault_ptoken",
+          "docs": [
+            "The vault's pToken account for this market, shared by its coins:",
+            "fees are measured as this collect's balance change, never swept."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "ptoken_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault_coin",
+          "docs": [
+            "The vault's coin account: the token A side of both claims (always 0",
+            "with fees taken in pToken), and where DBC's leftover lands."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "payee_owed",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  111,
+                  119,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ptoken_mint"
+              },
+              {
+                "kind": "account",
+                "path": "launch.payee",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "platform_owed",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  111,
+                  119,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ptoken_mint"
+              },
+              {
+                "kind": "account",
+                "path": "factory.platform",
+                "account": "Factory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dbc_pool_authority",
+          "address": "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM"
+        },
+        {
+          "name": "dbc_config"
+        },
+        {
+          "name": "dbc_pool",
+          "writable": true
+        },
+        {
+          "name": "dbc_base_vault",
+          "writable": true
+        },
+        {
+          "name": "dbc_quote_vault",
+          "writable": true
+        },
+        {
+          "name": "dbc_event_authority",
+          "address": "8Ks12pbrD6PXxfty1hVQiE9sc289zgU1zHkvXhrSdriF"
+        },
+        {
+          "name": "dbc_program",
+          "address": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
+        },
+        {
+          "name": "damm_pool_authority",
+          "optional": true,
+          "address": "HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC"
+        },
+        {
+          "name": "damm_pool",
+          "optional": true
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "damm_token_a_vault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "damm_token_b_vault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "position_nft_account",
+          "optional": true
+        },
+        {
+          "name": "damm_event_authority",
+          "optional": true,
+          "address": "3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet"
+        },
+        {
+          "name": "damm_program",
+          "optional": true,
+          "address": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "expire_launch",
+      "docs": [
+        "Close the record of a launch whose pool was not opened before its",
+        "quote expired (the bundle's second transaction never landed, or the",
+        "creator opened the pool later on a curve sized at a stale price).",
+        "Anyone; the rent goes back to the creator. Such a coin can never be",
+        "launched again (its config exists), and a pool on its config is then",
+        "a look-alike whose fees `sweep_fees` takes for the platform."
+      ],
+      "discriminator": [
+        98,
+        30,
+        30,
+        129,
+        233,
+        249,
+        51,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "launch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch.base_mint",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true
+        },
+        {
+          "name": "dbc_pool"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "graduate",
+      "docs": [
+        "Graduate a completed coin: run DBC's `migration_damm_v2` through the",
+        "pinned `Hv8L…` config, unless someone already has (DBC lets anyone,",
+        "and accepts no other config for our fee option), then record the",
+        "DAMM v2 pool and the fee vault's position. Anyone may send the",
+        "migrating call (the recorded position is then the one DBC made from",
+        "the NFT mint signing it); our keeper sends it as soon as the curve",
+        "completes.",
+        "",
+        "If someone migrated first, the call fails on its accounts and only",
+        "the keeper may resend it, naming the position DBC made (the first",
+        "position of DBC's migration transaction): a third party can fund,",
+        "lock and hand our vault a position identical to DBC's, so a",
+        "permissionless record would let it strand the real one's fees.",
+        "Nothing a third party adds to the pool can block graduation: the",
+        "position is checked against the liquidity DBC's migration puts in",
+        "it, a number fixed at launch, never against the pool's live total."
+      ],
+      "discriminator": [
+        45,
+        235,
+        225,
+        181,
+        17,
+        218,
+        64,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Pays the DAMM v2 accounts' rent when this call migrates; must be",
+            "the keeper when it does not."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch.base_mint",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dbc_pool",
+          "writable": true
+        },
+        {
+          "name": "dbc_config"
+        },
+        {
+          "name": "dbc_pool_authority",
+          "writable": true,
+          "address": "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM"
+        },
+        {
+          "name": "dbc_base_vault",
+          "writable": true
+        },
+        {
+          "name": "dbc_quote_vault",
+          "writable": true
+        },
+        {
+          "name": "base_mint",
+          "writable": true
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true
+        },
+        {
+          "name": "damm_config",
+          "address": "Hv8Lmzmnju6m7kcokVKvwqz7QPmdX9XfKjJsXz8RXcjp"
+        },
+        {
+          "name": "damm_pool",
+          "writable": true
+        },
+        {
+          "name": "damm_token_a_vault",
+          "writable": true
+        },
+        {
+          "name": "damm_token_b_vault",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "docs": [
+            "discriminator checks; its pool, NFT and liquidity are checked, and",
+            "its NFT mint is the signing one when this call migrates."
+          ],
+          "writable": true
+        },
+        {
+          "name": "position_nft_account",
+          "docs": [
+            "for the fee vault."
+          ],
+          "writable": true
+        },
+        {
+          "name": "position_nft_mint",
+          "docs": [
+            "The position NFT mint, when this call migrates (a fresh keypair)."
+          ],
+          "writable": true,
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "second_position_nft_mint",
+          "docs": [
+            "DBC's second position (rounding dust, the creator's), when this call",
+            "migrates: DBC refuses if it is needed and missing."
+          ],
+          "writable": true,
+          "signer": true,
+          "optional": true
+        },
+        {
+          "name": "second_position_nft_account",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "second_position",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "damm_pool_authority",
+          "address": "HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC"
+        },
+        {
+          "name": "damm_event_authority",
+          "address": "3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet"
+        },
+        {
+          "name": "damm_program",
+          "address": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+        },
+        {
+          "name": "dbc_program",
+          "address": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "token_2022_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Create the factory. Only the program's upgrade authority can, so",
+        "nobody can front-run the deployment with their own owner."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "The program's upgrade authority: nobody else can take the factory first."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_program",
+          "address": "GDe9PRUW6Tq2McNSLTfXMETk4PgjHhyCYm3JvneKxLzn"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "keeper",
+          "type": "pubkey"
+        },
+        {
+          "name": "platform",
+          "type": "pubkey"
+        },
+        {
+          "name": "holder_payout",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "launch",
+      "docs": [
+        "`LaunchFactory.launch`: a coin on the market of `quote`, its curve",
+        "sized at the quoted BUY price. The transaction's previous instruction",
+        "must be the ed25519 verification of `quote` by the exchange's signer",
+        "(the quote is not consumed, as on the EVM). `base_mint` is the coin's",
+        "fresh mint keypair, which DBC's pool creation then initializes. With",
+        "`first_buy > 0` the creator also mints pTokens for `first_buy` USDC at",
+        "the same quote, for the DBC `swap2` that follows the pool creation."
+      ],
+      "discriminator": [
+        153,
+        241,
+        93,
+        225,
+        22,
+        69,
+        74,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "exchange_config",
+          "docs": [
+            "Writable for the first buy's `mint`; this program never writes it."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                36,
+                95,
+                192,
+                124,
+                96,
+                134,
+                203,
+                107,
+                99,
+                147,
+                248,
+                173,
+                12,
+                92,
+                4,
+                30,
+                122,
+                7,
+                167,
+                31,
+                159,
+                116,
+                79,
+                43,
+                141,
+                213,
+                207,
+                41,
+                2,
+                127,
+                2,
+                46
+              ]
+            }
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "quote.position_id"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                36,
+                95,
+                192,
+                124,
+                96,
+                134,
+                203,
+                107,
+                99,
+                147,
+                248,
+                173,
+                12,
+                92,
+                4,
+                30,
+                122,
+                7,
+                167,
+                31,
+                159,
+                116,
+                79,
+                43,
+                141,
+                213,
+                207,
+                41,
+                2,
+                127,
+                2,
+                46
+              ]
+            }
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "quote.position_id"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                36,
+                95,
+                192,
+                124,
+                96,
+                134,
+                203,
+                107,
+                99,
+                147,
+                248,
+                173,
+                12,
+                92,
+                4,
+                30,
+                122,
+                7,
+                167,
+                31,
+                159,
+                116,
+                79,
+                43,
+                141,
+                213,
+                207,
+                41,
+                2,
+                127,
+                2,
+                46
+              ]
+            }
+          }
+        },
+        {
+          "name": "held",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  101,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "quote.position_id"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                36,
+                95,
+                192,
+                124,
+                96,
+                134,
+                203,
+                107,
+                99,
+                147,
+                248,
+                173,
+                12,
+                92,
+                4,
+                30,
+                122,
+                7,
+                167,
+                31,
+                159,
+                116,
+                79,
+                43,
+                141,
+                213,
+                207,
+                41,
+                2,
+                127,
+                2,
+                46
+              ]
+            }
+          }
+        },
+        {
+          "name": "dbc_config",
+          "docs": [
+            "so no one else can make a config at this address."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  98,
+                  99,
+                  95,
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint",
+          "docs": [
+            "The coin's fresh mint keypair (DBC creates the mint with it). Its",
+            "signature means nobody can make a config for someone else's mint, and",
+            "only its holder can create the pool this launch records."
+          ],
+          "signer": true
+        },
+        {
+          "name": "launch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "exchange_event_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  95,
+                  95,
+                  101,
+                  118,
+                  101,
+                  110,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                36,
+                95,
+                192,
+                124,
+                96,
+                134,
+                203,
+                107,
+                99,
+                147,
+                248,
+                173,
+                12,
+                92,
+                4,
+                30,
+                122,
+                7,
+                167,
+                31,
+                159,
+                116,
+                79,
+                43,
+                141,
+                213,
+                207,
+                41,
+                2,
+                127,
+                2,
+                46
+              ]
+            }
+          }
+        },
+        {
+          "name": "exchange_program",
+          "address": "3SzMv182JofB9Li4xjhqT5s283kwv8TbTgJWych6hDAd"
+        },
+        {
+          "name": "dbc_event_authority",
+          "address": "8Ks12pbrD6PXxfty1hVQiE9sc289zgU1zHkvXhrSdriF"
+        },
+        {
+          "name": "dbc_program",
+          "address": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "buyer_usdc",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "creator_ptoken",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "usdc_vault",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "usdc_mint",
+          "optional": true
+        },
+        {
+          "name": "fill",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "associated_token_program",
+          "optional": true,
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "quote",
+          "type": {
+            "defined": {
+              "name": "Quote"
+            }
+          }
+        },
+        {
+          "name": "holders_bps",
+          "type": "u16"
+        },
+        {
+          "name": "first_buy",
+          "type": "u64"
+        },
+        {
+          "name": "first_buy_min_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "propose_payee",
+      "docs": [
+        "Start moving a coin's payee (the EVM `setPayee`, made two-step: a",
+        "mistyped address would lose the coin's fees for good). Default cancels."
+      ],
+      "discriminator": [
+        100,
+        222,
+        80,
+        222,
+        169,
+        144,
+        31,
+        23
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch.base_mint",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "payee",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_config",
+      "docs": [
+        "`setConfig`: the platform payee and the graduation size, $1k-$1M.",
+        "Coins already launched keep their curve; owed fees stay with the old",
+        "platform. The platform may be any wallet, a creator's or payee's",
+        "included: its `Owed` accounts have their own seed, so `collect`",
+        "credits both sides apart."
+      ],
+      "discriminator": [
+        108,
+        158,
+        154,
+        175,
+        212,
+        98,
+        52,
+        66
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "platform",
+          "type": "pubkey"
+        },
+        {
+          "name": "grad_usd",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_fees",
+      "docs": [
+        "`setFees`, for coins launched from now on: the curve fee 0.25-2%,",
+        "each creator share 30-80%; the pool fee is the DAMM v2 config's 1%."
+      ],
+      "discriminator": [
+        137,
+        178,
+        49,
+        58,
+        0,
+        245,
+        242,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "fees",
+          "type": {
+            "defined": {
+              "name": "Fees"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_roles",
+      "discriminator": [
+        119,
+        86,
+        129,
+        161,
+        55,
+        23,
+        250,
+        12
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "keeper",
+          "type": "pubkey"
+        },
+        {
+          "name": "holder_payout",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "sweep_fees",
+      "docs": [
+        "Claim the partner fees DBC holds for our vault on a pool that is not",
+        "a Polypad coin, for the platform: anyone can open more pools on a",
+        "coin's config, or make a config naming our vault, and their trades",
+        "pay us partner fees that `collect` never touches (it claims only the",
+        "pool in a `Launch` record). Keeper only. A pool whose base or quote",
+        "mint has a `Launch` record is refused: a coin's own pool so its fees",
+        "always go through its split (an expired launch's record must be",
+        "closed first), and a look-alike quoted in a coin so nothing is ever",
+        "owed in a coin's mint, whose vault balance `burn_leftover` burns."
+      ],
+      "discriminator": [
+        175,
+        225,
+        98,
+        71,
+        118,
+        66,
+        34,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "docs": [
+            "config's fee claimer)."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch",
+          "docs": [
+            "coin whose fees `collect` splits."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quote_launch",
+          "docs": [
+            "ever owed in a coin's mint."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "quote_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "base_mint"
+        },
+        {
+          "name": "quote_mint"
+        },
+        {
+          "name": "vault_base",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault_quote",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "quote_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "base_owed",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  111,
+                  119,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_mint"
+              },
+              {
+                "kind": "account",
+                "path": "factory.platform",
+                "account": "Factory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "quote_owed",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  111,
+                  119,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "quote_mint"
+              },
+              {
+                "kind": "account",
+                "path": "factory.platform",
+                "account": "Factory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "dbc_pool_authority",
+          "address": "FhVo3mqL8PW5pH5U2CN4XE33DokiyZnUwuGpH2hmHLuM"
+        },
+        {
+          "name": "dbc_config"
+        },
+        {
+          "name": "dbc_pool",
+          "writable": true
+        },
+        {
+          "name": "dbc_base_vault",
+          "writable": true
+        },
+        {
+          "name": "dbc_quote_vault",
+          "writable": true
+        },
+        {
+          "name": "dbc_event_authority",
+          "address": "8Ks12pbrD6PXxfty1hVQiE9sc289zgU1zHkvXhrSdriF"
+        },
+        {
+          "name": "dbc_program",
+          "address": "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "sweep_position_fees",
+      "docs": [
+        "Claim the fees of a DAMM v2 position our vault holds in a pool that",
+        "is not a Polypad coin's, for the platform. DBC's migration hands our",
+        "vault the LP of any pool on a config naming it, and anyone may run",
+        "that migration: on a coin's pool opened too late (it never",
+        "graduates here), on another pool opened on a coin's config, or on a",
+        "look-alike config's pool. Those locked positions would otherwise",
+        "earn fees nobody can claim. Keeper only, like `sweep_fees`, and",
+        "refused (IsCoin) when either of the pool's mints has a `Launch`",
+        "record: a coin's own position goes through `collect`, and nothing is",
+        "ever owed in a coin's mint. A late coin's record is closed first",
+        "(`expire_launch`)."
+      ],
+      "discriminator": [
+        146,
+        252,
+        74,
+        129,
+        200,
+        102,
+        151,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_a",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_a_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch_b",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_b_mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_a_mint"
+        },
+        {
+          "name": "token_b_mint"
+        },
+        {
+          "name": "vault_a",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "token_a_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault_b",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "token_b_mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "owed_a",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  111,
+                  119,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_a_mint"
+              },
+              {
+                "kind": "account",
+                "path": "factory.platform",
+                "account": "Factory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "owed_b",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  108,
+                  97,
+                  116,
+                  102,
+                  111,
+                  114,
+                  109,
+                  95,
+                  111,
+                  119,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "token_b_mint"
+              },
+              {
+                "kind": "account",
+                "path": "factory.platform",
+                "account": "Factory"
+              }
+            ]
+          }
+        },
+        {
+          "name": "damm_pool_authority",
+          "address": "HLnpSz9h2S4hiLQ43rnSD9XkcUThA7B8hQMKmDaiTLcC"
+        },
+        {
+          "name": "damm_pool",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "position_nft_account"
+        },
+        {
+          "name": "damm_token_a_vault",
+          "writable": true
+        },
+        {
+          "name": "damm_token_b_vault",
+          "writable": true
+        },
+        {
+          "name": "damm_event_authority",
+          "address": "3rmHSu74h1ZcmAisVcWerTCiRDQbUrBKmcwptYGjHfet"
+        },
+        {
+          "name": "damm_program",
+          "address": "cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "transfer_ownership",
+      "docs": [
+        "Two-step ownership; there is no renounce (as on the EVM factory)."
+      ],
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "factory"
+          ]
+        },
+        {
+          "name": "factory",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "withdraw",
+      "docs": [
+        "`FeeVault.withdraw`: everything owed to the signer in one mint."
+      ],
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "payee",
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "owed",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "owed"
+              },
+              {
+                "kind": "account",
+                "path": "owed.mint",
+                "account": "Owed"
+              },
+              {
+                "kind": "account",
+                "path": "payee"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "to",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw_holders",
+      "docs": [
+        "Move up to `amount` of a coin's holder share to the payout wallet,",
+        "from which the keeper pays holders by their indexed balances (D3)."
+      ],
+      "discriminator": [
+        140,
+        199,
+        18,
+        2,
+        113,
+        73,
+        44,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "factory",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  97,
+                  99,
+                  116,
+                  111,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "launch",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  97,
+                  117,
+                  110,
+                  99,
+                  104
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "launch.base_mint",
+                "account": "Launch"
+              }
+            ]
+          }
+        },
+        {
+          "name": "fee_vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  101,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "fee_vault"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "to",
+          "docs": [
+            "Only the payout wallet's: a stolen keeper key cannot pay itself."
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Factory",
+      "discriminator": [
+        159,
+        68,
+        192,
+        61,
+        48,
+        249,
+        216,
+        202
+      ]
+    },
+    {
+      "name": "Launch",
+      "discriminator": [
+        144,
+        51,
+        51,
+        163,
+        206,
+        85,
+        213,
+        38
+      ]
+    },
+    {
+      "name": "Owed",
+      "discriminator": [
+        229,
+        81,
+        192,
+        139,
+        155,
+        99,
+        16,
+        56
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "ConfigSet",
+      "discriminator": [
+        15,
+        104,
+        59,
+        16,
+        236,
+        241,
+        8,
+        6
+      ]
+    },
+    {
+      "name": "FeesCollected",
+      "discriminator": [
+        233,
+        23,
+        117,
+        225,
+        107,
+        178,
+        254,
+        8
+      ]
+    },
+    {
+      "name": "FeesSet",
+      "discriminator": [
+        121,
+        74,
+        126,
+        26,
+        13,
+        22,
+        27,
+        166
+      ]
+    },
+    {
+      "name": "FeesSwept",
+      "discriminator": [
+        96,
+        218,
+        115,
+        136,
+        74,
+        170,
+        202,
+        172
+      ]
+    },
+    {
+      "name": "Graduated",
+      "discriminator": [
+        51,
+        241,
+        66,
+        50,
+        140,
+        245,
+        156,
+        192
+      ]
+    },
+    {
+      "name": "HoldersPaidOut",
+      "discriminator": [
+        210,
+        107,
+        166,
+        130,
+        165,
+        167,
+        36,
+        254
+      ]
+    },
+    {
+      "name": "LaunchExpired",
+      "discriminator": [
+        180,
+        38,
+        103,
+        246,
+        103,
+        80,
+        127,
+        199
+      ]
+    },
+    {
+      "name": "Launched",
+      "discriminator": [
+        209,
+        127,
+        29,
+        152,
+        129,
+        212,
+        189,
+        183
+      ]
+    },
+    {
+      "name": "LeftoverBurned",
+      "discriminator": [
+        28,
+        216,
+        145,
+        193,
+        156,
+        135,
+        159,
+        255
+      ]
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "discriminator": [
+        183,
+        253,
+        239,
+        246,
+        140,
+        179,
+        133,
+        105
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "discriminator": [
+        172,
+        61,
+        205,
+        183,
+        250,
+        50,
+        38,
+        98
+      ]
+    },
+    {
+      "name": "PayeeProposed",
+      "discriminator": [
+        9,
+        145,
+        199,
+        31,
+        4,
+        43,
+        164,
+        226
+      ]
+    },
+    {
+      "name": "PayeeSet",
+      "discriminator": [
+        155,
+        79,
+        206,
+        137,
+        97,
+        99,
+        144,
+        25
+      ]
+    },
+    {
+      "name": "PositionFeesSwept",
+      "discriminator": [
+        28,
+        84,
+        94,
+        145,
+        46,
+        107,
+        138,
+        177
+      ]
+    },
+    {
+      "name": "RolesSet",
+      "discriminator": [
+        214,
+        13,
+        236,
+        87,
+        106,
+        220,
+        125,
+        38
+      ]
+    },
+    {
+      "name": "Withdrawn",
+      "discriminator": [
+        20,
+        89,
+        223,
+        198,
+        194,
+        124,
+        219,
+        13
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "WrongSide",
+      "msg": "quote is for the other side"
+    },
+    {
+      "code": 6001,
+      "name": "QuoteExpired",
+      "msg": "quote expired"
+    },
+    {
+      "code": 6002,
+      "name": "QuoteTooLong",
+      "msg": "quote valid for longer than MAX_VALIDITY"
+    },
+    {
+      "code": 6003,
+      "name": "PriceOutOfRange",
+      "msg": "price outside (0, MAX_PRICE]"
+    },
+    {
+      "code": 6004,
+      "name": "NotEd25519",
+      "msg": "no ed25519 verification right before this instruction"
+    },
+    {
+      "code": 6005,
+      "name": "BadEd25519Header",
+      "msg": "ed25519 instruction is malformed or reads outside its own data"
+    },
+    {
+      "code": 6006,
+      "name": "BadSignature",
+      "msg": "quote not signed by the oracle signer"
+    },
+    {
+      "code": 6007,
+      "name": "OnlyOwner",
+      "msg": "only the owner"
+    },
+    {
+      "code": 6008,
+      "name": "NotPendingOwner",
+      "msg": "only the pending owner"
+    },
+    {
+      "code": 6009,
+      "name": "OnlyKeeper",
+      "msg": "only the keeper"
+    },
+    {
+      "code": 6010,
+      "name": "OnlyPayee",
+      "msg": "only the payee"
+    },
+    {
+      "code": 6011,
+      "name": "NotPendingPayee",
+      "msg": "only the pending payee"
+    },
+    {
+      "code": 6012,
+      "name": "BadParams",
+      "msg": "bad parameters"
+    },
+    {
+      "code": 6013,
+      "name": "BadFees",
+      "msg": "bad fees"
+    },
+    {
+      "code": 6014,
+      "name": "BadHoldersShare",
+      "msg": "holders share above 100%"
+    },
+    {
+      "code": 6015,
+      "name": "QuoteForOtherMarket",
+      "msg": "quote is for another market"
+    },
+    {
+      "code": 6016,
+      "name": "NoSigner",
+      "msg": "no oracle signer"
+    },
+    {
+      "code": 6017,
+      "name": "PriceOutOfBand",
+      "msg": "price outside the exchange's band"
+    },
+    {
+      "code": 6018,
+      "name": "MarketPaused",
+      "msg": "market paused"
+    },
+    {
+      "code": 6019,
+      "name": "MarketSettled",
+      "msg": "market settled"
+    },
+    {
+      "code": 6020,
+      "name": "NotTopLevel",
+      "msg": "launch must be a top-level instruction"
+    },
+    {
+      "code": 6021,
+      "name": "ConfigMismatch",
+      "msg": "DBC config is not what launch asked for"
+    },
+    {
+      "code": 6022,
+      "name": "MissingAccount",
+      "msg": "an account this path needs is missing"
+    },
+    {
+      "code": 6023,
+      "name": "WrongAccount",
+      "msg": "an account is not the one expected"
+    },
+    {
+      "code": 6024,
+      "name": "NotMigrated",
+      "msg": "the curve has not completed"
+    },
+    {
+      "code": 6025,
+      "name": "AlreadyGraduated",
+      "msg": "already graduated"
+    },
+    {
+      "code": 6026,
+      "name": "NotLocked",
+      "msg": "the pool position is not locked and owned by the fee vault"
+    },
+    {
+      "code": 6027,
+      "name": "NothingToClaim",
+      "msg": "nothing to withdraw"
+    },
+    {
+      "code": 6028,
+      "name": "MathOverflow",
+      "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6029,
+      "name": "PoolTooLate",
+      "msg": "the pool was opened after the launch quote expired"
+    },
+    {
+      "code": 6030,
+      "name": "NotExpired",
+      "msg": "the launch's pool was opened in time"
+    },
+    {
+      "code": 6031,
+      "name": "IsCoin",
+      "msg": "this pool is a Polypad coin: its fees go through collect"
+    }
+  ],
+  "types": [
+    {
+      "name": "Config",
+      "docs": [
+        "`PriceOracle` + `PExchange` contract-wide state. PDA `[\"exchange\"]`; it is",
+        "also the authority of the float vault and every pToken mint."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "docs": [
+              "Two-step ownership: the new owner accepts."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "docs": [
+              "Pauses and settles markets, reports backing, sends float to the bridge, may halt."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "factory",
+            "docs": [
+              "May create pTokens for new markets (the launch program's signer)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "signer",
+            "docs": [
+              "Signs quotes (ed25519). Default = revoked: no quote verifies."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_signer_at",
+            "type": "i64"
+          },
+          {
+            "name": "usdc_mint",
+            "docs": [
+              "Pinned at initialize: the only mint the float is held in."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "bridge_deposit",
+            "docs": [
+              "Polymarket bridge deposit token account. Default = none."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_bridge_deposit",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_bridge_deposit_at",
+            "type": "i64"
+          },
+          {
+            "name": "bridge_ever_set",
+            "docs": [
+              "Set once a bridge deposit has been in place; later ones wait BRIDGE_DELAY."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "halted",
+            "docs": [
+              "Every mint, redeem, release and queue payment refused while set."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "buy_spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "sell_spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "settle_fee_bps",
+            "docs": [
+              "Fee on redemptions of a settled market, bps of the payout."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_price",
+            "type": "u64"
+          },
+          {
+            "name": "max_price",
+            "type": "u64"
+          },
+          {
+            "name": "meter_sales",
+            "docs": [
+              "Whether sales at a quote count against the hourly cap too. Payouts of",
+              "settled markets always do."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "default_max_risk",
+            "docs": [
+              "USDC a market's unbacked supply may lose if its price went to $1, unless overridden."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_total_risk",
+            "docs": [
+              "USDC all markets' unbacked supply together may lose."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_risk",
+            "docs": [
+              "Sum of every market's stored `risk`, 12 decimals."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "outflow_floor",
+            "docs": [
+              "The hourly redemption cap is never below this, USDC."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "outflow_float_bps",
+            "docs": [
+              "The hourly redemption cap as a share of the float, bps."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hour_float",
+            "type": {
+              "defined": {
+                "name": "HourFloat"
+              }
+            }
+          },
+          {
+            "name": "outflow",
+            "type": {
+              "defined": {
+                "name": "Outflow"
+              }
+            }
+          },
+          {
+            "name": "queued",
+            "docs": [
+              "USDC owed to the queue, including claims set aside for their owners."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "unclaimed_total",
+            "docs": [
+              "Set-aside claims' USDC: reserved for those owners, never paid to the queue."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claim_head",
+            "docs": [
+              "The queue is `claim_head..claim_tail`, oldest first."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claim_tail",
+            "type": "u64"
+          },
+          {
+            "name": "aside_next",
+            "docs": [
+              "Next index for a claim set aside at a release (its own namespace, never in line)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "delayed_next",
+            "docs": [
+              "Next delayed-sale ticket."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ConfigSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "platform",
+            "type": "pubkey"
+          },
+          {
+            "name": "grad_usd",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Factory",
+      "docs": [
+        "`LaunchFactory` state. PDA `[\"factory\"]`; it is also the exchange's",
+        "`factory` signer, so it alone may create markets there."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "docs": [
+              "Pays holders: may move a coin's holder share to `holder_payout`, nothing else."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "platform",
+            "docs": [
+              "Receives the platform side of every fee (as `Owed`)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "holder_payout",
+            "docs": [
+              "The wallet the keeper pays holders from (D3). Set by the owner, so a",
+              "stolen keeper key cannot send the holders' share anywhere else."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "grad_usd",
+            "type": "u64"
+          },
+          {
+            "name": "fees",
+            "type": {
+              "defined": {
+                "name": "Fees"
+              }
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Fees",
+      "docs": [
+        "Fees fixed per coin at launch (the EVM `Fees` struct). The pool fee is in",
+        "bps here (100 = 1%), not Uniswap v4 hundredths of a bip."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "curve_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "curve_creator_share_bps",
+            "type": "u16"
+          },
+          {
+            "name": "pool_fee_bps",
+            "type": "u16"
+          },
+          {
+            "name": "pool_creator_share_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesCollected",
+      "docs": [
+        "One `collect`: pToken claimed from the curve and from the pool, and how",
+        "the total was split."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "curve",
+            "type": "u64"
+          },
+          {
+            "name": "pool",
+            "type": "u64"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "to_payee",
+            "type": "u64"
+          },
+          {
+            "name": "to_holders",
+            "type": "u64"
+          },
+          {
+            "name": "to_platform",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "fees",
+            "type": {
+              "defined": {
+                "name": "Fees"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FeesSwept",
+      "docs": [
+        "Partner fees claimed from a DBC pool that is not a Polypad coin (one",
+        "opened on our config or a look-alike's), credited to the platform."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "quote_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "base",
+            "type": "u64"
+          },
+          {
+            "name": "quote",
+            "type": "u64"
+          },
+          {
+            "name": "platform",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Graduated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "damm_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "position",
+            "type": "pubkey"
+          },
+          {
+            "name": "locked_liquidity",
+            "type": "u128"
+          },
+          {
+            "name": "migrated_here",
+            "docs": [
+              "Whether this `graduate` ran DBC's migration itself, or found it done."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HoldersPaidOut",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HourFloat",
+      "docs": [
+        "The free float at the first mint or redeem of `hour`, before that trade",
+        "moved it (`amount`), and the hour's cap base: the lower of it and the last",
+        "such snapshot (`base`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hour",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "base",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Launch",
+      "docs": [
+        "One coin: what `LaunchFactory` registered and what the FeeVault keeps",
+        "per coin. PDA `[\"launch\", base_mint]`. Its existence is what makes a",
+        "DBC pool a Polypad coin (METEORA.md M8): the indexer and every",
+        "instruction here accept only `pool` and `dbc_config` from this record."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "ptoken_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "dbc_config",
+            "docs": [
+              "PDA `[\"dbc_config\", base_mint]`, created by `launch` and by nothing else."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "docs": [
+              "The DBC pool `launch` required in its transaction. Other pools on the",
+              "same config can exist (DBC lets anyone open one); they are not this coin."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_deadline",
+            "docs": [
+              "The quote's `valid_until`: the pool must be opened by then (in the",
+              "launch transaction or its bundle), or the curve, sized at that quote's",
+              "price, is stale. A pool opened later never graduates or collects",
+              "here, and anyone can close the record (`expire_launch`)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "docs": [
+              "Receives the creator side less the holders' part. Two-step transfer."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "holders_bps",
+            "docs": [
+              "Share of the creator side kept for holders (D3), fixed at launch."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "fees",
+            "type": {
+              "defined": {
+                "name": "Fees"
+              }
+            }
+          },
+          {
+            "name": "price",
+            "docs": [
+              "The quoted BUY price the curve was sized at, and the curve's numbers."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "phantom",
+            "type": "u64"
+          },
+          {
+            "name": "threshold",
+            "type": "u64"
+          },
+          {
+            "name": "launched_at",
+            "type": "i64"
+          },
+          {
+            "name": "graduated",
+            "docs": [
+              "Set by `graduate` once DBC has migrated the curve into DAMM v2."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "damm_config",
+            "docs": [
+              "The DAMM v2 config the pool was created under (always `Hv8L…`)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "damm_pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "position",
+            "type": "pubkey"
+          },
+          {
+            "name": "position_nft_account",
+            "type": "pubkey"
+          },
+          {
+            "name": "locked_liquidity",
+            "docs": [
+              "The fee vault position's permanently locked liquidity: exactly what",
+              "DBC's migration put in it."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "holders_owed",
+            "docs": [
+              "Holders' pToken not yet moved to the payout wallet."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "curve_fees",
+            "docs": [
+              "pToken fees collected, before the split, per source."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "pool_fees",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LaunchExpired",
+      "docs": [
+        "A launch whose pool was not opened before its quote expired: the record",
+        "is closed, and any pool opened on its config is only a look-alike."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "opened",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Launched",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "dbc_config",
+            "type": "pubkey"
+          },
+          {
+            "name": "ptoken_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "phantom",
+            "type": "u64"
+          },
+          {
+            "name": "holders_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LeftoverBurned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Outflow",
+      "docs": [
+        "Metered USDC per clock hour. The EVM mapping is only ever read for the",
+        "current hour and the one before, so two slots hold all of it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "cur_hour",
+            "type": "u64"
+          },
+          {
+            "name": "cur",
+            "type": "u64"
+          },
+          {
+            "name": "prev_hour",
+            "type": "u64"
+          },
+          {
+            "name": "prev",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Owed",
+      "docs": [
+        "Tokens owed to one payee (a creator's payee or the platform), across",
+        "every coin of that market: the EVM `owed[asset][payee]`, so fees already",
+        "owed stay with the old payee when a coin's payee changes. PDA",
+        "`[\"owed\", mint, payee]` for a payee, `[\"platform_owed\", mint, platform]`",
+        "for the platform. `mint` is a pToken, or for fees swept from look-alike",
+        "pools whatever those pools paid in."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "platform",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previous",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PayeeProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_payee",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PayeeSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "base_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "previous",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PositionFeesSwept",
+      "docs": [
+        "Fees claimed from a DAMM v2 position our vault holds in a pool that is",
+        "not a Polypad coin's (a late coin's or a look-alike's, migrated by",
+        "anyone), credited to the platform."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "position",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint_a",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint_b",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_a",
+            "type": "u64"
+          },
+          {
+            "name": "fee_b",
+            "type": "u64"
+          },
+          {
+            "name": "platform",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Quote",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "max_amount",
+            "type": "u64"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RolesSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "holder_payout",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Withdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "payee",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

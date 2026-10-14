@@ -1,0 +1,5127 @@
+{
+  "address": "3SzMv182JofB9Li4xjhqT5s283kwv8TbTgJWych6hDAd",
+  "metadata": {
+    "name": "polypad_exchange",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Polypad exchange: signed-quote oracle, pTokens and the USDC float (Solana port of PriceOracle + PExchange)"
+  },
+  "instructions": [
+    {
+      "name": "absorb",
+      "docs": [
+        "Burn pToken the exchange holds beyond delayed-sale stock: in `held`,",
+        "and in `other` if passed (the config PDA's associated token account,",
+        "or any pToken account it owns). Anyone."
+      ],
+      "discriminator": [
+        121,
+        23,
+        131,
+        56,
+        87,
+        131,
+        143,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true
+        },
+        {
+          "name": "held",
+          "writable": true
+        },
+        {
+          "name": "other",
+          "docs": [
+            "Optional: another pToken account of this market the exchange PDA owns,",
+            "normally its associated token account; all of it is burned."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "accept_bridge_deposit",
+      "discriminator": [
+        75,
+        63,
+        219,
+        213,
+        88,
+        47,
+        129,
+        38
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "accept_ownership",
+      "discriminator": [
+        172,
+        23,
+        43,
+        13,
+        238,
+        213,
+        85,
+        150
+      ],
+      "accounts": [
+        {
+          "name": "pending_owner",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "accept_signer",
+      "docs": [
+        "Accept the proposed signer, after `ROLE_DELAY` and within `ACCEPT_WINDOW`",
+        "of it, so a forgotten proposal cannot be accepted months later."
+      ],
+      "discriminator": [
+        12,
+        109,
+        137,
+        210,
+        5,
+        59,
+        147,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel",
+      "docs": [
+        "Undo a delayed sale before it is released. Owner; works while halted."
+      ],
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ticket.position_id",
+                "account": "DelayedSale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint"
+        },
+        {
+          "name": "held",
+          "writable": true
+        },
+        {
+          "name": "ticket",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  97,
+                  121,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ticket.ticket",
+                "account": "DelayedSale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_to",
+          "writable": true
+        },
+        {
+          "name": "dest",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_settle",
+      "docs": [
+        "Withdraw a settlement that has not taken effect yet (a wrong or forged",
+        "payout). The market goes back to how it was before it: paused only if",
+        "it already was. The keeper that recorded it can no longer settle here."
+      ],
+      "discriminator": [
+        234,
+        45,
+        210,
+        212,
+        157,
+        152,
+        126,
+        211
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_fill",
+      "docs": [
+        "Close an expired quote's fill record; its rent goes back to whoever",
+        "paid it. Anyone, once the quote is past `valid_until + MAX_VALIDITY`:",
+        "it can never verify again, so its fill can never be needed."
+      ],
+      "discriminator": [
+        64,
+        145,
+        84,
+        179,
+        61,
+        80,
+        53,
+        149
+      ],
+      "accounts": [
+        {
+          "name": "fill",
+          "writable": true
+        },
+        {
+          "name": "payer",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_market",
+      "docs": [
+        "The market and its pToken, created on first use (`ensurePToken`); a",
+        "second call for the same market changes nothing. Factory or owner."
+      ],
+      "discriminator": [
+        103,
+        226,
+        97,
+        235,
+        200,
+        188,
+        251,
+        254
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "docs": [
+            "The factory (the launch program's signer) or the owner."
+          ],
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "position_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "docs": [
+            "Classic SPL Token, 6 decimals, minted only by the exchange PDA, no freeze authority."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  116,
+                  111,
+                  107,
+                  101,
+                  110
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "position_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "held",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  101,
+                  108,
+                  100
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "position_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "position_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "halt",
+      "docs": [
+        "Stop every mint, redeem, release and queue payment. The keeper may halt; only the owner resumes."
+      ],
+      "discriminator": [
+        24,
+        156,
+        8,
+        121,
+        65,
+        3,
+        5,
+        82
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Create the config and the float vault. Only the program's upgrade",
+        "authority can, so nobody can front-run the deployment with their own",
+        "owner. The USDC mint is pinned here for good."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "The program's upgrade authority: nobody else can take the config first."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  108,
+                  111,
+                  97,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "exchange_program",
+          "address": "3SzMv182JofB9Li4xjhqT5s283kwv8TbTgJWych6hDAd"
+        },
+        {
+          "name": "program_data"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "owner",
+          "type": "pubkey"
+        },
+        {
+          "name": "keeper",
+          "type": "pubkey"
+        },
+        {
+          "name": "signer",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "mint",
+      "docs": [
+        "Pay USDC, receive pToken at the quoted buy price plus the buy spread;",
+        "or at the payout plus the spread when one applies (quote ignored).",
+        "The transaction's previous instruction must be the ed25519",
+        "verification of `quote` by the oracle signer."
+      ],
+      "discriminator": [
+        51,
+        57,
+        225,
+        47,
+        182,
+        146,
+        137,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true
+        },
+        {
+          "name": "buyer_usdc",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "docs": [
+            "Receives the pToken."
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "fill",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "quote"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "usdc_in",
+          "type": "u64"
+        },
+        {
+          "name": "min_out",
+          "type": "u64"
+        },
+        {
+          "name": "quote",
+          "type": {
+            "defined": {
+              "name": "Quote"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "mint_at_payout",
+      "docs": [
+        "A mint with no quote: the market is settled at a payout, or has a $1",
+        "payout recorded and still inside its delay. A $0 payout refuses."
+      ],
+      "discriminator": [
+        255,
+        219,
+        160,
+        203,
+        22,
+        149,
+        248,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "buyer",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true
+        },
+        {
+          "name": "buyer_usdc",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "usdc_in",
+          "type": "u64"
+        },
+        {
+          "name": "min_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "pay_queue",
+      "docs": [
+        "Pay up to `max` queued claims, oldest first, while the float covers",
+        "them. Anyone may call."
+      ],
+      "discriminator": [
+        220,
+        181,
+        70,
+        205,
+        133,
+        38,
+        184,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "max",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "preview_mint",
+      "docs": [
+        "pToken a mint of `usdc_in` at `price` would pay (`mintOut`). Read-only."
+      ],
+      "discriminator": [
+        42,
+        71,
+        86,
+        125,
+        215,
+        190,
+        214,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "usdc_in",
+          "type": "u64"
+        }
+      ],
+      "returns": "u64"
+    },
+    {
+      "name": "preview_redeem",
+      "docs": [
+        "USDC a redemption of `amount_in` at `price` would pay, at a quote or",
+        "(`settled`) at a payout (`redeemOut`). Before any outflow cap or queue. Read-only."
+      ],
+      "discriminator": [
+        122,
+        195,
+        125,
+        8,
+        168,
+        149,
+        50,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "settled",
+          "type": "bool"
+        }
+      ],
+      "returns": "u64"
+    },
+    {
+      "name": "propose_bridge_deposit",
+      "discriminator": [
+        86,
+        227,
+        75,
+        214,
+        126,
+        108,
+        230,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "bridge_deposit",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "redeem",
+      "docs": [
+        "Burn pToken, receive USDC at the quoted sell price minus the sell",
+        "spread, or at the payout less the settle fee once the market has",
+        "settled (quote ignored). Works on a paused market."
+      ],
+      "discriminator": [
+        184,
+        12,
+        86,
+        149,
+        70,
+        196,
+        97,
+        225
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true
+        },
+        {
+          "name": "seller_ptoken",
+          "writable": true
+        },
+        {
+          "name": "held",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "docs": [
+            "Receives the USDC."
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "fill",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  102,
+                  105,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "quote"
+              }
+            ]
+          }
+        },
+        {
+          "name": "instructions",
+          "address": "Sysvar1nstructions1111111111111111111111111"
+        },
+        {
+          "name": "new_claim",
+          "docs": [
+            "if part of the payment queues."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "new_ticket",
+          "docs": [
+            "only if part of the sale passes the hourly cap."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "min_out",
+          "type": "u64"
+        },
+        {
+          "name": "quote",
+          "type": {
+            "defined": {
+              "name": "Quote"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "redeem_at_payout",
+      "docs": [
+        "Redeem a settled market at its payout less the settle fee. No quote."
+      ],
+      "discriminator": [
+        29,
+        113,
+        248,
+        37,
+        207,
+        94,
+        254,
+        81
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true
+        },
+        {
+          "name": "seller_ptoken",
+          "writable": true
+        },
+        {
+          "name": "held",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "new_claim",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "new_ticket",
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount_in",
+          "type": "u64"
+        },
+        {
+          "name": "min_out",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "refresh_risk",
+      "docs": [
+        "Bring markets' stored risk down to what their unbacked supply can carry",
+        "now (or to 0 once settled). Only ever lowers it; anyone may call.",
+        "`remaining_accounts` holds `(market, pToken mint)` pairs."
+      ],
+      "discriminator": [
+        0,
+        166,
+        132,
+        169,
+        134,
+        113,
+        30,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "release",
+      "docs": [
+        "Pay a delayed sale once `DELAY` has passed. Anyone may call."
+      ],
+      "discriminator": [
+        253,
+        249,
+        15,
+        206,
+        28,
+        127,
+        193,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Pays the rent of any claim the payment creates."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ticket.position_id",
+                "account": "DelayedSale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint",
+          "writable": true
+        },
+        {
+          "name": "held",
+          "writable": true
+        },
+        {
+          "name": "ticket",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  97,
+                  121,
+                  101,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ticket.ticket",
+                "account": "DelayedSale"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rent_to",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "docs": [
+            "paying (it may have been closed or frozen since the sale)."
+          ],
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "new_claim",
+          "docs": [
+            "if part of the payment queues."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "new_aside",
+          "docs": [
+            "if the recipient cannot be paid and the payment is set aside."
+          ],
+          "writable": true,
+          "optional": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "report_backed",
+      "docs": [
+        "Shares the desk holds on Polymarket, per market, as it read them when",
+        "each market's `burned_total` was `seen` and its `minted_total` was",
+        "`minted` (one read of the market, taken before the holdings).",
+        "`remaining_accounts` holds `(market, pToken mint)` pairs in the order",
+        "of `amounts`. Keeper. A report against another state (a keeper bug)",
+        "is skipped, not refused, so it cannot stop the rest of the batch; the",
+        "market is stored all the same, as the visit booked any direct burns",
+        "into it and into `total_risk` alike."
+      ],
+      "discriminator": [
+        120,
+        254,
+        225,
+        235,
+        46,
+        11,
+        153,
+        200
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amounts",
+          "type": {
+            "vec": "u64"
+          }
+        },
+        {
+          "name": "seen",
+          "type": {
+            "vec": "u64"
+          }
+        },
+        {
+          "name": "minted",
+          "type": {
+            "vec": "u64"
+          }
+        }
+      ]
+    },
+    {
+      "name": "rescue",
+      "docs": [
+        "Return tokens sent to the exchange by mistake. Never USDC or a pToken."
+      ],
+      "discriminator": [
+        42,
+        111,
+        16,
+        88,
+        147,
+        101,
+        209,
+        62
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "dest",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "resume",
+      "discriminator": [
+        1,
+        166,
+        51,
+        170,
+        127,
+        32,
+        141,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "send_to_bridge",
+      "docs": [
+        "Move float to the desk's Polymarket deposit account, never more than",
+        "the free float (USDC owed to the queue stays). Keeper; not stopped by",
+        "`halt`, so the desk can still be funded to pay the queue."
+      ],
+      "discriminator": [
+        119,
+        111,
+        95,
+        186,
+        145,
+        173,
+        96,
+        251
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "bridge",
+          "docs": [
+            "The destination is fixed by the owner."
+          ],
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_max_risk",
+      "docs": [
+        "A market's own risk cap, USDC; 0 = the default. Owner."
+      ],
+      "discriminator": [
+        130,
+        222,
+        194,
+        223,
+        153,
+        161,
+        101,
+        228
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "cap",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_max_total_risk",
+      "discriminator": [
+        171,
+        217,
+        254,
+        135,
+        177,
+        253,
+        151,
+        79
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "cap",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_meter_sales",
+      "discriminator": [
+        228,
+        193,
+        167,
+        213,
+        213,
+        249,
+        113,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "on",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_outflow_cap",
+      "docs": [
+        "The hourly redemption cap: `float_bps` of the float, never below",
+        "`floor`. At most 100%: a cap above the float would never bind."
+      ],
+      "discriminator": [
+        122,
+        48,
+        243,
+        45,
+        238,
+        246,
+        3,
+        177
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "floor",
+          "type": "u64"
+        },
+        {
+          "name": "float_bps",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_params",
+      "docs": [
+        "Spreads at most 5%; the band inside [0.1c, $1)."
+      ],
+      "discriminator": [
+        27,
+        234,
+        178,
+        52,
+        147,
+        2,
+        187,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "buy_spread_bps",
+          "type": "u16"
+        },
+        {
+          "name": "sell_spread_bps",
+          "type": "u16"
+        },
+        {
+          "name": "min_price",
+          "type": "u64"
+        },
+        {
+          "name": "max_price",
+          "type": "u64"
+        },
+        {
+          "name": "default_max_risk",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "docs": [
+        "Pause or unpause the markets in `remaining_accounts`. Keeper."
+      ],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "keeper",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "set_roles",
+      "docs": [
+        "Set the keeper and factory. The bridge deposit can be set here only the",
+        "first time; after that it changes through `propose_bridge_deposit` with",
+        "a `BRIDGE_DELAY`, since it is where the float may be sent. Clearing is",
+        "instant; only the very first bridge skips the delay, so a clear",
+        "followed by a set cannot install a new one at once."
+      ],
+      "discriminator": [
+        119,
+        86,
+        129,
+        161,
+        55,
+        23,
+        250,
+        12
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "keeper",
+          "type": "pubkey"
+        },
+        {
+          "name": "factory",
+          "type": "pubkey"
+        },
+        {
+          "name": "bridge_deposit",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_settle_fee",
+      "discriminator": [
+        185,
+        50,
+        147,
+        206,
+        137,
+        80,
+        110,
+        196
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "settle_fee_bps",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "set_share_label",
+      "docs": [
+        "Name a market's share after its outcome. Keeper or owner. Kept on the",
+        "market account (Metaplex metadata is a later step)."
+      ],
+      "discriminator": [
+        134,
+        138,
+        8,
+        175,
+        156,
+        100,
+        91,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "symbol",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "set_signer",
+      "docs": [
+        "Change the quote signer. A new signer takes effect `ROLE_DELAY` after",
+        "this (via `accept_signer`), so a stolen owner key cannot start signing",
+        "prices before anyone notices. Default revokes at once."
+      ],
+      "discriminator": [
+        127,
+        120,
+        252,
+        184,
+        97,
+        4,
+        88,
+        68
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "signer",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "settle",
+      "docs": [
+        "Record the final payout per share, 0..$1. It takes effect after",
+        "`SETTLE_DELAY`, and buying stops at once. One-way once in effect.",
+        "Keeper or owner; a keeper whose settlement on this market the owner",
+        "cancelled may not record another there (its key may be stolen); a new",
+        "keeper may."
+      ],
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "payout",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transfer_ownership",
+      "docs": [
+        "Start a two-step ownership transfer. There is no renounce: a program",
+        "without an owner could never be resumed or reconfigured. Default",
+        "cancels a pending transfer."
+      ],
+      "discriminator": [
+        65,
+        177,
+        215,
+        73,
+        53,
+        45,
+        99,
+        47
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": [
+        {
+          "name": "new_owner",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "view_float",
+      "docs": [
+        "The float and the queue now (`freeFloat`, `outflowRemaining`,",
+        "`queueLength`, `delayedLength`). Read-only: call it in a simulation."
+      ],
+      "discriminator": [
+        66,
+        170,
+        83,
+        84,
+        136,
+        108,
+        104,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault"
+        }
+      ],
+      "args": [],
+      "returns": {
+        "defined": {
+          "name": "FloatView"
+        }
+      }
+    },
+    {
+      "name": "view_market",
+      "docs": [
+        "One market now (`oracle.status`, `oracle.settlement`, `maxRisk`, the",
+        "supply and backing, and the `seen` a keeper reports against). Read-only."
+      ],
+      "discriminator": [
+        180,
+        196,
+        224,
+        76,
+        34,
+        173,
+        252,
+        241
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.position_id",
+                "account": "Market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ptoken_mint"
+        }
+      ],
+      "args": [],
+      "returns": {
+        "defined": {
+          "name": "MarketView"
+        }
+      }
+    },
+    {
+      "name": "withdraw_unclaimed",
+      "docs": [
+        "Pay a set-aside claim to the account it was owed to. Anyone may call,",
+        "for a recipient that cannot call itself; not stopped by `halt`."
+      ],
+      "discriminator": [
+        243,
+        12,
+        129,
+        222,
+        63,
+        137,
+        199,
+        70
+      ],
+      "accounts": [
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  99,
+                  104,
+                  97,
+                  110,
+                  103,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "writable": true
+        },
+        {
+          "name": "rent_to",
+          "writable": true
+        },
+        {
+          "name": "to",
+          "writable": true
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "usdc_mint"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "event_authority"
+        },
+        {
+          "name": "program"
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Claim",
+      "discriminator": [
+        155,
+        70,
+        22,
+        176,
+        123,
+        215,
+        246,
+        102
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "DelayedSale",
+      "discriminator": [
+        51,
+        193,
+        110,
+        221,
+        225,
+        112,
+        106,
+        153
+      ]
+    },
+    {
+      "name": "Market",
+      "discriminator": [
+        219,
+        190,
+        213,
+        55,
+        0,
+        227,
+        198,
+        154
+      ]
+    },
+    {
+      "name": "QuoteFill",
+      "discriminator": [
+        82,
+        71,
+        232,
+        67,
+        159,
+        6,
+        102,
+        210
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "Absorbed",
+      "discriminator": [
+        249,
+        137,
+        89,
+        153,
+        248,
+        170,
+        218,
+        32
+      ]
+    },
+    {
+      "name": "BackedReported",
+      "discriminator": [
+        198,
+        77,
+        138,
+        150,
+        175,
+        42,
+        188,
+        2
+      ]
+    },
+    {
+      "name": "BridgeDepositProposed",
+      "discriminator": [
+        43,
+        67,
+        30,
+        106,
+        225,
+        12,
+        152,
+        72
+      ]
+    },
+    {
+      "name": "Cancelled",
+      "discriminator": [
+        136,
+        23,
+        42,
+        65,
+        143,
+        233,
+        234,
+        46
+      ]
+    },
+    {
+      "name": "ClaimPaid",
+      "discriminator": [
+        212,
+        155,
+        88,
+        118,
+        128,
+        99,
+        132,
+        42
+      ]
+    },
+    {
+      "name": "ClaimUndelivered",
+      "discriminator": [
+        22,
+        229,
+        44,
+        168,
+        226,
+        30,
+        3,
+        32
+      ]
+    },
+    {
+      "name": "HaltSet",
+      "discriminator": [
+        72,
+        72,
+        136,
+        23,
+        166,
+        26,
+        205,
+        223
+      ]
+    },
+    {
+      "name": "Initialized",
+      "discriminator": [
+        208,
+        213,
+        115,
+        98,
+        115,
+        82,
+        201,
+        209
+      ]
+    },
+    {
+      "name": "MaxRiskSet",
+      "discriminator": [
+        74,
+        163,
+        50,
+        80,
+        152,
+        178,
+        7,
+        144
+      ]
+    },
+    {
+      "name": "MaxTotalRiskSet",
+      "discriminator": [
+        215,
+        60,
+        109,
+        72,
+        168,
+        19,
+        214,
+        176
+      ]
+    },
+    {
+      "name": "MeterSalesSet",
+      "discriminator": [
+        158,
+        22,
+        150,
+        14,
+        105,
+        202,
+        240,
+        88
+      ]
+    },
+    {
+      "name": "Minted",
+      "discriminator": [
+        174,
+        131,
+        21,
+        57,
+        88,
+        117,
+        114,
+        121
+      ]
+    },
+    {
+      "name": "OutflowCapSet",
+      "discriminator": [
+        56,
+        110,
+        116,
+        84,
+        242,
+        2,
+        190,
+        46
+      ]
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "discriminator": [
+        183,
+        253,
+        239,
+        246,
+        140,
+        179,
+        133,
+        105
+      ]
+    },
+    {
+      "name": "OwnershipTransferred",
+      "discriminator": [
+        172,
+        61,
+        205,
+        183,
+        250,
+        50,
+        38,
+        98
+      ]
+    },
+    {
+      "name": "PTokenCreated",
+      "discriminator": [
+        135,
+        135,
+        207,
+        121,
+        111,
+        70,
+        249,
+        42
+      ]
+    },
+    {
+      "name": "ParamsSet",
+      "discriminator": [
+        57,
+        111,
+        33,
+        252,
+        120,
+        76,
+        98,
+        245
+      ]
+    },
+    {
+      "name": "PausedSet",
+      "discriminator": [
+        171,
+        125,
+        127,
+        156,
+        233,
+        81,
+        68,
+        66
+      ]
+    },
+    {
+      "name": "Queued",
+      "discriminator": [
+        118,
+        75,
+        149,
+        53,
+        106,
+        148,
+        117,
+        134
+      ]
+    },
+    {
+      "name": "Redeemed",
+      "discriminator": [
+        14,
+        29,
+        183,
+        71,
+        31,
+        165,
+        107,
+        38
+      ]
+    },
+    {
+      "name": "Released",
+      "discriminator": [
+        232,
+        229,
+        255,
+        136,
+        101,
+        189,
+        15,
+        220
+      ]
+    },
+    {
+      "name": "Rescued",
+      "discriminator": [
+        121,
+        161,
+        19,
+        44,
+        228,
+        240,
+        254,
+        193
+      ]
+    },
+    {
+      "name": "RolesSet",
+      "discriminator": [
+        214,
+        13,
+        236,
+        87,
+        106,
+        220,
+        125,
+        38
+      ]
+    },
+    {
+      "name": "SaleDelayed",
+      "discriminator": [
+        39,
+        19,
+        218,
+        30,
+        246,
+        60,
+        33,
+        22
+      ]
+    },
+    {
+      "name": "SentToBridge",
+      "discriminator": [
+        48,
+        107,
+        197,
+        201,
+        150,
+        193,
+        214,
+        65
+      ]
+    },
+    {
+      "name": "SetAside",
+      "discriminator": [
+        191,
+        186,
+        73,
+        158,
+        99,
+        215,
+        182,
+        60
+      ]
+    },
+    {
+      "name": "SettleCancelled",
+      "discriminator": [
+        143,
+        77,
+        102,
+        61,
+        169,
+        248,
+        198,
+        239
+      ]
+    },
+    {
+      "name": "SettleFeeSet",
+      "discriminator": [
+        255,
+        210,
+        155,
+        13,
+        15,
+        157,
+        77,
+        113
+      ]
+    },
+    {
+      "name": "Settled",
+      "discriminator": [
+        232,
+        210,
+        40,
+        17,
+        142,
+        124,
+        145,
+        238
+      ]
+    },
+    {
+      "name": "ShareLabelSet",
+      "discriminator": [
+        21,
+        128,
+        66,
+        227,
+        249,
+        223,
+        71,
+        243
+      ]
+    },
+    {
+      "name": "SignerProposed",
+      "discriminator": [
+        200,
+        233,
+        28,
+        20,
+        176,
+        105,
+        98,
+        221
+      ]
+    },
+    {
+      "name": "SignerSet",
+      "discriminator": [
+        137,
+        203,
+        187,
+        74,
+        141,
+        187,
+        226,
+        95
+      ]
+    },
+    {
+      "name": "UnclaimedWithdrawn",
+      "discriminator": [
+        119,
+        107,
+        13,
+        138,
+        66,
+        57,
+        38,
+        24
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "WrongSide",
+      "msg": "quote is for the other side"
+    },
+    {
+      "code": 6001,
+      "name": "QuoteExpired",
+      "msg": "quote expired"
+    },
+    {
+      "code": 6002,
+      "name": "QuoteTooLong",
+      "msg": "quote valid for longer than MAX_VALIDITY"
+    },
+    {
+      "code": 6003,
+      "name": "PriceOutOfRange",
+      "msg": "price outside (0, MAX_PRICE] for a quote, or above $1 for a payout"
+    },
+    {
+      "code": 6004,
+      "name": "NotEd25519",
+      "msg": "no ed25519 verification right before this instruction"
+    },
+    {
+      "code": 6005,
+      "name": "BadEd25519Header",
+      "msg": "ed25519 instruction is malformed or reads outside its own data"
+    },
+    {
+      "code": 6006,
+      "name": "BadSignature",
+      "msg": "quote not signed by the oracle signer"
+    },
+    {
+      "code": 6007,
+      "name": "OnlyOwner",
+      "msg": "only the owner"
+    },
+    {
+      "code": 6008,
+      "name": "OnlyKeeper",
+      "msg": "only the keeper"
+    },
+    {
+      "code": 6009,
+      "name": "OnlyFactory",
+      "msg": "only the factory or the owner"
+    },
+    {
+      "code": 6010,
+      "name": "NotPendingOwner",
+      "msg": "only the pending owner"
+    },
+    {
+      "code": 6011,
+      "name": "BadParams",
+      "msg": "bad parameters"
+    },
+    {
+      "code": 6012,
+      "name": "NothingPending",
+      "msg": "nothing pending"
+    },
+    {
+      "code": 6013,
+      "name": "NotYet",
+      "msg": "not yet"
+    },
+    {
+      "code": 6014,
+      "name": "Halted",
+      "msg": "halted"
+    },
+    {
+      "code": 6015,
+      "name": "ZeroAmount",
+      "msg": "zero amount"
+    },
+    {
+      "code": 6016,
+      "name": "QuoteForOtherMarket",
+      "msg": "quote is for another market"
+    },
+    {
+      "code": 6017,
+      "name": "QuoteTooSmall",
+      "msg": "quote does not cover this size"
+    },
+    {
+      "code": 6018,
+      "name": "PriceOutOfBand",
+      "msg": "price outside the band"
+    },
+    {
+      "code": 6019,
+      "name": "RiskCap",
+      "msg": "unbacked risk over the cap"
+    },
+    {
+      "code": 6020,
+      "name": "InsufficientFloat",
+      "msg": "not enough free float"
+    },
+    {
+      "code": 6021,
+      "name": "Slippage",
+      "msg": "slippage"
+    },
+    {
+      "code": 6022,
+      "name": "NoBridge",
+      "msg": "no bridge deposit set"
+    },
+    {
+      "code": 6023,
+      "name": "BridgeChangeDelayed",
+      "msg": "the bridge deposit changes through propose/accept"
+    },
+    {
+      "code": 6024,
+      "name": "NotRescuable",
+      "msg": "the float and pTokens cannot be rescued"
+    },
+    {
+      "code": 6025,
+      "name": "SettledAtZero",
+      "msg": "market settled at $0: nothing to mint"
+    },
+    {
+      "code": 6026,
+      "name": "DustOverCap",
+      "msg": "under MIN_DELAYED over a spent cap"
+    },
+    {
+      "code": 6027,
+      "name": "AlreadySettled",
+      "msg": "market already settled"
+    },
+    {
+      "code": 6028,
+      "name": "MarketPaused",
+      "msg": "market paused"
+    },
+    {
+      "code": 6029,
+      "name": "MarketSettled",
+      "msg": "market settled"
+    },
+    {
+      "code": 6030,
+      "name": "NotAtPayout",
+      "msg": "no settlement pays here: the market is open"
+    },
+    {
+      "code": 6031,
+      "name": "NoSigner",
+      "msg": "no oracle signer"
+    },
+    {
+      "code": 6032,
+      "name": "MissingAccount",
+      "msg": "an account this instruction needs was not passed"
+    },
+    {
+      "code": 6033,
+      "name": "WrongAccount",
+      "msg": "an account is not the one expected"
+    },
+    {
+      "code": 6034,
+      "name": "QueueOutOfOrder",
+      "msg": "queue accounts out of order"
+    },
+    {
+      "code": 6035,
+      "name": "FillLive",
+      "msg": "quote fill still live"
+    },
+    {
+      "code": 6036,
+      "name": "FloatFrozen",
+      "msg": "the float is frozen: no payment can be made"
+    },
+    {
+      "code": 6037,
+      "name": "MathOverflow",
+      "msg": "arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "Absorbed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BackedReported",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BridgeDepositProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bridge_deposit",
+            "type": "pubkey"
+          },
+          {
+            "name": "effective_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Cancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ticket",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Claim",
+      "docs": [
+        "USDC owed to `to` (a USDC token account). In line at `[\"claim\", index]`",
+        "until paid; a claim whose recipient cannot be paid is set aside for its",
+        "owner (`set_aside`), as are payments a release could not deliver",
+        "(`[\"aside\", index]`). Set-aside claims are paid only to `to`, by",
+        "`withdraw_unclaimed`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "index",
+            "type": "u64"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "set_aside",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimPaid",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ticket",
+            "type": "u64"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ClaimUndelivered",
+      "docs": [
+        "A queued claim whose recipient could not be paid: set aside for its owner."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ticket",
+            "type": "u64"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Config",
+      "docs": [
+        "`PriceOracle` + `PExchange` contract-wide state. PDA `[\"exchange\"]`; it is",
+        "also the authority of the float vault and every pToken mint."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "docs": [
+              "Two-step ownership: the new owner accepts."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "keeper",
+            "docs": [
+              "Pauses and settles markets, reports backing, sends float to the bridge, may halt."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "factory",
+            "docs": [
+              "May create pTokens for new markets (the launch program's signer)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "signer",
+            "docs": [
+              "Signs quotes (ed25519). Default = revoked: no quote verifies."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_signer_at",
+            "type": "i64"
+          },
+          {
+            "name": "usdc_mint",
+            "docs": [
+              "Pinned at initialize: the only mint the float is held in."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "bridge_deposit",
+            "docs": [
+              "Polymarket bridge deposit token account. Default = none."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_bridge_deposit",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_bridge_deposit_at",
+            "type": "i64"
+          },
+          {
+            "name": "bridge_ever_set",
+            "docs": [
+              "Set once a bridge deposit has been in place; later ones wait BRIDGE_DELAY."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "halted",
+            "docs": [
+              "Every mint, redeem, release and queue payment refused while set."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "buy_spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "sell_spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "settle_fee_bps",
+            "docs": [
+              "Fee on redemptions of a settled market, bps of the payout."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "min_price",
+            "type": "u64"
+          },
+          {
+            "name": "max_price",
+            "type": "u64"
+          },
+          {
+            "name": "meter_sales",
+            "docs": [
+              "Whether sales at a quote count against the hourly cap too. Payouts of",
+              "settled markets always do."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "default_max_risk",
+            "docs": [
+              "USDC a market's unbacked supply may lose if its price went to $1, unless overridden."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_total_risk",
+            "docs": [
+              "USDC all markets' unbacked supply together may lose."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_risk",
+            "docs": [
+              "Sum of every market's stored `risk`, 12 decimals."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "outflow_floor",
+            "docs": [
+              "The hourly redemption cap is never below this, USDC."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "outflow_float_bps",
+            "docs": [
+              "The hourly redemption cap as a share of the float, bps."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "hour_float",
+            "type": {
+              "defined": {
+                "name": "HourFloat"
+              }
+            }
+          },
+          {
+            "name": "outflow",
+            "type": {
+              "defined": {
+                "name": "Outflow"
+              }
+            }
+          },
+          {
+            "name": "queued",
+            "docs": [
+              "USDC owed to the queue, including claims set aside for their owners."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "unclaimed_total",
+            "docs": [
+              "Set-aside claims' USDC: reserved for those owners, never paid to the queue."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claim_head",
+            "docs": [
+              "The queue is `claim_head..claim_tail`, oldest first."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claim_tail",
+            "type": "u64"
+          },
+          {
+            "name": "aside_next",
+            "docs": [
+              "Next index for a claim set aside at a release (its own namespace, never in line)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "delayed_next",
+            "docs": [
+              "Next delayed-sale ticket."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DelayedSale",
+      "docs": [
+        "The part of a sale over the hourly cap: `p_amount` pToken held in the",
+        "market's `held` account, owed `amount` USDC once released. PDA",
+        "`[\"delayed\", ticket]`, closed when released or cancelled."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ticket",
+            "type": "u64"
+          },
+          {
+            "name": "to",
+            "docs": [
+              "USDC token account the sale pays."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "to_owner",
+            "docs": [
+              "That account's owner at the sale: a cancel returns the pToken to them."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          },
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "p_amount",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FloatView",
+      "docs": [
+        "The float and the queue, as the next instruction would see them."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "docs": [
+              "USDC in the float vault."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "free_float",
+            "docs": [
+              "What can pay a redemption now or go to the bridge (`freeFloat`)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "queued",
+            "type": "u64"
+          },
+          {
+            "name": "unclaimed_total",
+            "type": "u64"
+          },
+          {
+            "name": "claim_head",
+            "docs": [
+              "Next claim in line and the next index a claim would take: the queue",
+              "is `claim_head..claim_tail` (`queueLength` is their difference)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "claim_tail",
+            "type": "u64"
+          },
+          {
+            "name": "aside_next",
+            "docs": [
+              "Next set-aside claim index and next delayed-sale ticket (`delayedLength`)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "delayed_next",
+            "type": "u64"
+          },
+          {
+            "name": "outflow_remaining",
+            "docs": [
+              "USDC metered redemptions may still pay this sliding hour (`outflowRemaining`)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_risk",
+            "type": "u128"
+          },
+          {
+            "name": "max_total_risk",
+            "type": "u64"
+          },
+          {
+            "name": "halted",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HaltSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "halted",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HourFloat",
+      "docs": [
+        "The free float at the first mint or redeem of `hour`, before that trade",
+        "moved it (`amount`), and the hour's cap base: the lower of it and the last",
+        "such snapshot (`base`)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "hour",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "base",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Initialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Market",
+      "docs": [
+        "One market: the oracle's `Status` and the exchange's per-market mappings.",
+        "PDA `[\"market\", position_id]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "docs": [
+              "The CTF position id (also the CLOB token id), big-endian: the EVM uint256."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mint",
+            "docs": [
+              "pToken mint, PDA `[\"ptoken\", position_id]`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "held",
+            "docs": [
+              "The exchange's own pToken account, PDA `[\"held\", position_id]`: shares",
+              "held for delayed sales, and fee shares sent here to be absorbed (as",
+              "may any other pToken account the exchange PDA owns, its associated",
+              "token account included)."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "paused_before_settle",
+            "docs": [
+              "Whether it was paused before a settlement was recorded, to restore on cancel."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "payout",
+            "type": "u64"
+          },
+          {
+            "name": "settle_at",
+            "docs": [
+              "When the payout takes effect; 0 = not settled."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "settled_by",
+            "docs": [
+              "Who recorded the settlement now pending or in effect."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "barred",
+            "docs": [
+              "A keeper whose settlement here the owner cancelled: it may not record another."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "backed",
+            "docs": [
+              "Shares the desk holds on Polymarket, as last reported, less burns since."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "max_risk_override",
+            "docs": [
+              "0 = use `default_max_risk`."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "risk",
+            "docs": [
+              "What the unbacked supply could cost to cover at $1: shares x (1 - price), 12 decimals."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "low",
+            "docs": [
+              "Lowest price minted at since the market was last fully backed (0 = unknown, taken as $0)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "high",
+            "docs": [
+              "Highest price minted at since then (ONE = unknown, taken as $1)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "minted_since_report",
+            "docs": [
+              "Shares minted since the keeper last reported the market."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "minted_total",
+            "docs": [
+              "Every share the exchange has ever minted in this market."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "burned_total",
+            "docs": [
+              "Every share ever burned in this market. Holders can burn their own",
+              "pTokens straight through the token program, which the exchange never",
+              "sees; each instruction that reads the supply first counts those, so",
+              "afterwards `burned_total == minted_total - supply` (`Config::burned_outside`)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "low_supply",
+            "docs": [
+              "The lowest supply seen since the last backing report (the supply",
+              "then, lowered by every burn; a direct burn shows at the next",
+              "instruction, before any mint can lift the supply again). The desk",
+              "sells only shares beyond the supply, so whatever it read since that",
+              "report it still holds at least down to this (`Config::report`)."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "burned_at_report",
+            "docs": [
+              "`burned_total` at the last backing report: how low the supply could",
+              "have gone between a read taken before that report and the report."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "delayed_shares",
+            "docs": [
+              "pToken held in `held` for live delayed sales: `absorb` leaves it alone."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "mint_bump",
+            "type": "u8"
+          },
+          {
+            "name": "held_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketView",
+      "docs": [
+        "One market, as the next instruction would see it: burns made straight",
+        "through the token program are already counted."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "supply",
+            "type": "u64"
+          },
+          {
+            "name": "backed",
+            "type": "u64"
+          },
+          {
+            "name": "minted_since_report",
+            "type": "u64"
+          },
+          {
+            "name": "minted_total",
+            "type": "u64"
+          },
+          {
+            "name": "burned_total",
+            "docs": [
+              "Every share burned so far, direct burns included: the `seen` a keeper",
+              "passes to `report_backed` with the holdings it reads now."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "delayed_shares",
+            "type": "u64"
+          },
+          {
+            "name": "risk",
+            "docs": [
+              "Stored risk (12 decimals) and the market's cap in USDC (`maxRisk`)."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "max_risk",
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "settled",
+            "docs": [
+              "A payout is in effect: redeem and mint at it with no quote."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "mints_at_payout",
+            "docs": [
+              "A mint prices at the payout (settled, or a pending $1 payout)."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "payout",
+            "type": "u64"
+          },
+          {
+            "name": "settle_at",
+            "docs": [
+              "When the payout takes effect; 0 = none recorded."
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaxRiskSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "cap",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MaxTotalRiskSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "max_total_risk",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MeterSalesSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "on",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Minted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "usdc_in",
+            "type": "u64"
+          },
+          {
+            "name": "p_out",
+            "type": "u64"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Outflow",
+      "docs": [
+        "Metered USDC per clock hour. The EVM mapping is only ever read for the",
+        "current hour and the one before, so two slots hold all of it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "cur_hour",
+            "type": "u64"
+          },
+          {
+            "name": "cur",
+            "type": "u64"
+          },
+          {
+            "name": "prev_hour",
+            "type": "u64"
+          },
+          {
+            "name": "prev",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OutflowCapSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "floor",
+            "type": "u64"
+          },
+          {
+            "name": "float_bps",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferStarted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OwnershipTransferred",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "previous",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PTokenCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ParamsSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "buy_spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "sell_spread_bps",
+            "type": "u16"
+          },
+          {
+            "name": "min_price",
+            "type": "u64"
+          },
+          {
+            "name": "max_price",
+            "type": "u64"
+          },
+          {
+            "name": "default_max_risk",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PausedSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Queued",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ticket",
+            "type": "u64"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Quote",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "side",
+            "type": "u8"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          },
+          {
+            "name": "max_amount",
+            "type": "u64"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QuoteFill",
+      "docs": [
+        "How much of one signed quote has been used (the EVM `quoteFilled[digest]`).",
+        "PDA `[\"fill\", sha256(message)]`."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "filled",
+            "type": "u64"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
+          },
+          {
+            "name": "payer",
+            "docs": [
+              "Who paid the rent; `close_fill` refunds them."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Redeemed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "p_in",
+            "type": "u64"
+          },
+          {
+            "name": "usdc_out",
+            "type": "u64"
+          },
+          {
+            "name": "price",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Released",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ticket",
+            "type": "u64"
+          },
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Rescued",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RolesSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "keeper",
+            "type": "pubkey"
+          },
+          {
+            "name": "factory",
+            "type": "pubkey"
+          },
+          {
+            "name": "bridge_deposit",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SaleDelayed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "ticket",
+            "type": "u64"
+          },
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "p_amount",
+            "type": "u64"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "ready_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SentToBridge",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SetAside",
+      "docs": [
+        "A release that could not pay its recipient: set aside at `claim`",
+        "(`[\"aside\", index]`). The EVM adds it to `unclaimed[to]` silently."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettleCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SettleFeeSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "settle_fee_bps",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Settled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "payout",
+            "type": "u64"
+          },
+          {
+            "name": "effective_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ShareLabelSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "position_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "symbol",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SignerProposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "effective_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SignerSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "signer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UnclaimedWithdrawn",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "claim",
+            "type": "pubkey"
+          },
+          {
+            "name": "to",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

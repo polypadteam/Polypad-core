@@ -1,0 +1,6 @@
+target/
+test-ledger/
+.anchor/
+node_modules/
+# Program keypairs fix the program address: never commit them.
+*-keypair.json

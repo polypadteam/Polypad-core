@@ -1,7 +1,8 @@
 # Polypad Core
 
-Smart contracts for [Polypad](https://polypad.trade): memecoins on Robinhood Chain,
-each paired with a live Polymarket outcome.
+Smart contracts for [Polypad](https://polypad.trade): memecoins on Robinhood Chain
+(live, v14) and Solana (in development, unaudited), each paired with a live
+Polymarket outcome.
 
 A Polypad coin launches on a bonding curve like any memecoin, but its curve is
 priced in **shares of a real Polymarket outcome** instead of ETH. Buying pushes
@@ -40,6 +41,9 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
   on-chain result; it takes effect an hour later (`SETTLE_DELAY`), and the owner
   can cancel a wrong one meanwhile, so one hot key cannot settle a market at $1
   and redeem the float.
+- **$1 payouts mint at once (v14).** While a recorded $1 payout waits out
+  `SETTLE_DELAY`, buys mint at $1 with no quote: a share sold at $1 costs the
+  float nothing whatever the outcome.
 
 ### Safety
 
@@ -64,6 +68,34 @@ See [docs/INTEGRATION.md](docs/INTEGRATION.md) for events, pricing, the swap API
 and plain on-chain trading. ABIs are in [`abi/`](abi) (JSON, and TypeScript in
 `abi/index.ts`). Deployed addresses are in [`deployments/`](deployments).
 
+## Solana (unaudited, devnet only)
+
+[`solana/`](solana) holds the Solana port: two Anchor programs that mirror the
+EVM contracts as closely as the chain allows, with USDC in place of USDG and
+Meteora's Dynamic Bonding Curve and DAMM v2 in place of `BondingCurve` and
+Uniswap v4.
+
+| Program | Mirrors | Devnet address |
+| --- | --- | --- |
+| `polypad_exchange` | `PExchange`, `PriceOracle`, `PToken` (ed25519-signed quotes) | `3SzMv182JofB9Li4xjhqT5s283kwv8TbTgJWych6hDAd` |
+| `polypad_launch` | `LaunchFactory`, `Graduator`, `FeeVault` (Meteora DBC → DAMM v2, LP locked) | `GDe9PRUW6Tq2McNSLTfXMETk4PgjHhyCYm3JvneKxLzn` |
+
+**Not audited and not on mainnet.** Do not use with real funds. Differences
+from the EVM contracts, and why, are in
+[`solana/docs/EVM-PORT-SPEC.md`](solana/docs/EVM-PORT-SPEC.md); the Meteora
+integration is in [`solana/docs/METEORA.md`](solana/docs/METEORA.md).
+
+```sh
+cd solana
+anchor build --ignore-keys
+bash programs/polypad_launch/tests/fixtures/fetch.sh   # Meteora mainnet binaries for the tests
+cargo test
+```
+
+Requires Anchor 1.2.1, Agave 4.3.0, Rust 1.97. The tests run the programs in
+LiteSVM against Meteora's mainnet binaries, plus a stateful fuzz of the
+exchange's accounting (`PX_FUZZ_SEED`, `RUNS`, `STEPS`).
+
 ## Build and test
 
 ```sh
@@ -77,6 +109,7 @@ Requires [Foundry](https://book.getfoundry.sh). Solidity 0.8.28, optimizer 1,000
 
 ## License
 
-The contracts in `src/` are licensed under the Business Source License 1.1
-(see [LICENSE](LICENSE)). ABIs, docs, tests and scripts are MIT (see
+The contracts in `src/` and the Solana programs' sources in
+`solana/programs/*/src/` are licensed under the Business Source License 1.1
+(see [LICENSE](LICENSE)). ABIs, IDLs, docs, tests and scripts are MIT (see
 [LICENSE-MIT](LICENSE-MIT)).
