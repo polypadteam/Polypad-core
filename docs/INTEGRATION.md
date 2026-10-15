@@ -27,13 +27,25 @@ times the payout ($1 or $0 each).
 
 | Contract | Address | Role |
 | --- | --- | --- |
-| LaunchFactory | `0xbfbda9E51Fd6ECeB92E91f4A9ef334fA61092835` | Creates coins; emits `Launched` |
-| Router | `0xb322ba4e11515D606AfD65d05d6A9d26484d5985` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
-| PExchange | `0x57DFCccCD3c6fE7380020CE5eF601D2DD504df77` | USDG ⇄ pToken at signed prices |
-| PriceOracle | `0xD2CBb67E1761c983d4a8498804872655D851d4B0` | Verifies signed prices, posts on-chain prices |
-| Graduator | `0x9915cFa0819F150DDB0d542204A30c5f8b68E000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
-| FeeVault | `0x545d3F4aE79eA19940a4a899D909fB6169FB3e97` | Creator fees and holder dividends |
+| LaunchFactory | `0xbAab6e12Ebc3cf225F95744241D642CF16ee36F7` | Creates coins; emits `Launched` |
+| Router | `0x2b73c5f4e808fEe4B7e88471E40b2b0143b426fc` | USDG in and out, curve or pool; emits `Swap` with USDG amounts |
+| PExchange | `0xc29C934e6915d2C99846E1C2B3cE5742b5FC26ed` | USDG ⇄ pToken at signed prices |
+| PriceOracle | `0xda28004E3059a4614230aA463eF4650040C2B01b` | Verifies signed prices; each market's pause and settlement |
+| PriceFeed | `0x97BC4A6dDC8C74924fD9EC2B00A0333300b67b34` | Each market's live Polymarket price (mid, bid, ask), posted on chain for display and checking the peg |
+| Graduator | `0x3Ef423b2Af24f4431B7bb0298b799A5109D66000` | Creates and owns each graduated coin's Uniswap v4 pool; the pools' hook |
+| FeeVault | `0xb1846bF8a5b1d188775D8E58dB84b3bee1262e20` | Creator fees and holder dividends |
 | PoolManager | `0x8366a39CC670B4001A1121B8F6A443A643e40951` | Uniswap v4 (Robinhood Chain) |
+
+### Live odds on chain (PriceFeed)
+
+`PriceFeed.prices(positionId)` returns the outcome's Polymarket midpoint, best
+bid and best ask (six decimals, $1 = 1e6) and `updatedAt` (unix seconds);
+`latest(positionId)` returns the midpoint and time alone. Every update emits
+`PricePosted(positionId, mid, bid, ask)`. The keeper posts for every market
+with a coin when its midpoint moves half a cent, and at least every ten
+minutes while the feed is live. A coin's dollar price is its price in pToken
+(curve or pool) times the pToken's midpoint here. Nothing trades at these
+prices: mints and sales use a quote signed at the moment of the trade.
 
 Each launch adds a **Coin** (ERC-20) and a **BondingCurve**. Each Polymarket
 outcome has one **pToken**, shared by every coin on that outcome. Its name and
@@ -266,9 +278,11 @@ GET https://api.polypad.trade/v1/swap
 Send `approval` first when present, then `tx`, before `validUntil` (unix
 seconds). A quote lives between 3 and 15 seconds depending on the market and
 how fast its odds are moving: always read `validUntil` rather than assuming a
-fixed window. Errors come back as `{"error": "..."}` with HTTP 4xx: the market
-is paused before its end date, the trade is too large for the Polymarket book,
-the odds are moving fast, and so on.
+fixed window. Errors come back as `{"error": "..."}` with HTTP 4xx: the trade is
+too large for the Polymarket book, the odds are moving fast, the market is settling
+(buys wait about an hour after Polymarket closes it), and so on. No date stops a
+trade: past the end date and through live games, coins trade both ways until the
+market settles.
 
 A signed quote is not tied to the taker it was requested for: whoever holds
 the quote and signature can use it until `validUntil` (the `tx` itself pays
@@ -277,7 +291,8 @@ the quote and signature can use it until `validUntil` (the `tx` itself pays
 Selling a coin for USDG can be refused for a moment (HTTP 422) when the odds
 jump fast or the Polymarket book is one-sided (no bids near the price): retry
 after a few seconds, or sell for shares (`receive=shares`), which needs no
-quote. Selling is never paused for the market's end date. After the market resolves YES the coin keeps trading both ways: the
+quote. Selling is never paused. Buys are never refused for the book: a thin
+book or a fast move only prices them higher. After the market resolves YES the coin keeps trading both ways: the
 pToken is then worth $1 and mints and redeems at $1 with no quote needed
 (0.25% in, 0.5% out); after NO it is worth $0 and only sells remain.
 

@@ -1,7 +1,27 @@
+<p align="center">
+  <a href="https://polypad.trade"><img src="assets/og.png" alt="Polypad" width="100%"></a>
+</p>
+
+<p align="center">
+  <b>Memecoins on live Polymarket odds, on Robinhood Chain.</b>
+</p>
+
+<p align="center">
+  <a href="https://github.com/polypadteam/Polypad-core/actions/workflows/test.yml"><img src="https://github.com/polypadteam/Polypad-core/actions/workflows/test.yml/badge.svg" alt="tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BUSL--1.1-blue" alt="license BUSL-1.1"></a>
+  <img src="https://img.shields.io/badge/solidity-0.8.28-363636?logo=solidity" alt="solidity 0.8.28">
+  <a href="https://book.getfoundry.sh"><img src="https://img.shields.io/badge/built%20with-Foundry-orange" alt="built with Foundry"></a>
+  <img src="https://img.shields.io/badge/chain-Robinhood%20Chain%20(4663)-00c805" alt="Robinhood Chain">
+  <a href="deployments"><img src="https://img.shields.io/badge/sourcify-verified-2ea44f" alt="verified on Sourcify"></a>
+  <img src="https://img.shields.io/badge/Uniswap-v4-ff007a?logo=uniswap&logoColor=white" alt="Uniswap v4">
+</p>
+
+---
+
 # Polypad Core
 
 Smart contracts for [Polypad](https://polypad.trade): memecoins on Robinhood Chain
-(live, v14) and Solana (in development, unaudited), each paired with a live
+(live, v15) and Solana (in development, unaudited), each paired with a live
 Polymarket outcome.
 
 A Polypad coin launches on a bonding curve like any memecoin, but its curve is
@@ -22,7 +42,7 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 | `LaunchFactory` | Launches a coin: deploys the `Coin` (1B supply) and its `BondingCurve` |
 | `BondingCurve` | Constant-product curve over a virtual reserve; trades the coin against the market's pToken; fees fixed at launch (1.4% on the curve, 1% in the pool, half to the creator side) — see [docs/FEES.md](docs/FEES.md) |
 | `PToken` | One per Polymarket outcome: a 1:1 claim on a real share |
-| `PExchange` | USDG ⇄ pToken at a verified price; holds the float; caps the dollars at risk on unbacked supply per market, and meters outflow per hour (a sale past the cap is delayed, never refused) |
+| `PExchange` | USDG ⇄ pToken at a verified price; holds the float; tracks unbacked risk per market and in total; meters payouts of settled markets per hour |
 | `PriceOracle` | Verifies signed quotes, and holds each market's pause and settlement |
 | `Router` | One-transaction USDG buys and sells, and sales of coins for shares (`sellForShares`); emits one `Swap` per trade |
 | `Graduator` | Moves a sold-out curve into a Uniswap v4 pool it owns forever (locked liquidity); the pools' only hook |
@@ -32,24 +52,30 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 
 - **Signed quotes.** Polypad's pricer reads the live Polymarket order book and
   signs a price for one trade, valid for seconds. The quote rides in the user's
-  own transaction and `PriceOracle.verify` checks it.
-- **No posted prices (v9).** The on-chain posted price of earlier versions
-  (closed since v7) is removed: a one-step trade at a posted price can be raced
-  by anyone who sees Polymarket move first. `Router.sellForShares` and trades
+  own transaction and `PriceOracle.verify` checks it. Prices run from 0.1¢ to
+  99.9¢, the range Polymarket itself trades in.
+- **No posted prices.** A one-step trade at a posted on-chain price can be
+  raced by anyone who sees Polymarket move first, so every mint and sale at a
+  quote is priced at the moment it happens. `Router.sellForShares` and trades
   on a settled market need no quote.
 - **Settlement.** The keeper records each market's payout from Polymarket's
   on-chain result; it takes effect an hour later (`SETTLE_DELAY`), and the owner
   can cancel a wrong one meanwhile, so one hot key cannot settle a market at $1
   and redeem the float.
-- **$1 payouts mint at once (v14).** While a recorded $1 payout waits out
+- **$1 payouts mint at once.** While a recorded $1 payout waits out
   `SETTLE_DELAY`, buys mint at $1 with no quote: a share sold at $1 costs the
-  float nothing whatever the outcome.
+  float nothing whatever the outcome. Those shares never count as hedging for
+  shares minted at a quote, in a backing report or when shares are burned.
+- **Backing reports (v15).** The desk reports the shares it holds together with
+  the pToken supply it read them at; a report is held to the lowest supply
+  since that read, so a stale report can never take risk off shares minted
+  after it.
 
 ### Safety
 
-- Buys are priced 0.1¢–99.9¢ at a quote signed from the live Polymarket book;
-  the desk buys the matching shares. Unbacked risk is tracked per market and
-  in total (`unbackedRisk`, `totalRisk`) with owner-set caps (off at launch).
+- Every pToken minted is matched by a real Polymarket share the desk buys.
+  Unbacked risk is tracked per market and in total (`unbackedRisk`,
+  `totalRisk`) with owner-set caps.
 - Payouts of settled markets are metered per hour: the larger of $100,000 and
   50% of the float as the hour began. The part over it is held at its price
   and paid an hour later; the owner can cancel it meanwhile (the pToken goes
@@ -59,8 +85,9 @@ user USDG ──Router──> PExchange mints pToken (1 pToken = 1 real Polymark
 - A new signer takes effect only after 12 hours, a new bridge address after 2
   days; revoking the signer is immediate.
 - `rescue` can never move the float or a pToken.
-- Selling always works while a market is live, including after buys pause before
-  the end date. After resolution, pTokens pay the market's payout.
+- Selling always works. Buys pause from a market's end date until it resolves.
+  After resolution, pTokens are worth the market's payout: a winning one keeps
+  trading both ways at $1, a losing one is worth $0 and can only be sold.
 
 ## Integrating
 
@@ -105,7 +132,9 @@ forge build
 forge test
 ```
 
-Requires [Foundry](https://book.getfoundry.sh). Solidity 0.8.28, optimizer 1,000,000 runs.
+Requires [Foundry](https://book.getfoundry.sh). Solidity 0.8.28; optimizer at
+1,000,000 runs, except `PExchange` at 2,000 runs to fit the 24 KB size limit.
+The deployed contracts verify with `--compilation-profile exchange`.
 
 ## License
 

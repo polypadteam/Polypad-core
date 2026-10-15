@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {seenOf} from "../lib/Seen.sol";
+import {seenOf, supplyOf} from "../lib/Seen.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -173,9 +173,10 @@ contract AccessMatrixTest is PolypadBase {
 
     function test_exchange_keeperOnly() public {
         uint256[] memory seen1 = seenOf(exchange, _ids(ID));
+        uint256[] memory sup1 = supplyOf(exchange, _ids(ID));
         vm.startPrank(eve);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
-        exchange.reportBacked(_ids(ID), _one(1), seen1);
+        exchange.reportBacked(_ids(ID), _one(1), seen1, sup1);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
         exchange.sendToBridge(1);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
@@ -185,16 +186,19 @@ contract AccessMatrixTest is PolypadBase {
         vm.stopPrank();
         // The owner may not report backing or move the float.
         uint256[] memory seen2 = seenOf(exchange, _ids(ID));
+        uint256[] memory sup2 = supplyOf(exchange, _ids(ID));
         vm.startPrank(owner);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
-        exchange.reportBacked(_ids(ID), _one(1), seen2);
+        exchange.reportBacked(_ids(ID), _one(1), seen2, sup2);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
         exchange.sendToBridge(1);
         vm.stopPrank();
 
         uint256[] memory seen3 = seenOf(exchange, _ids(ID));
+
+        uint256[] memory sup3 = supplyOf(exchange, _ids(ID));
         vm.startPrank(keeper);
-        exchange.reportBacked(_ids(ID), _one(1), seen3);
+        exchange.reportBacked(_ids(ID), _one(1), seen3, sup3);
         exchange.sendToBridge(1);
         exchange.setShareLabel(ID, "Yes", "pYES");
         exchange.halt();

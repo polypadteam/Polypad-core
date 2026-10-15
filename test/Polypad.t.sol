@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {seenOf} from "./lib/Seen.sol";
+import {seenOf, supplyOf} from "./lib/Seen.sol";
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -186,8 +186,9 @@ contract PolypadBase is Test {
         ids[0] = id;
         amounts[0] = amount;
         uint256[] memory seen1 = seenOf(exchange, ids);
+        uint256[] memory sup1 = supplyOf(exchange, ids);
         vm.prank(keeper);
-        exchange.reportBacked(ids, amounts, seen1);
+        exchange.reportBacked(ids, amounts, seen1, sup1);
     }
 
     function _pause(uint256 id) internal {

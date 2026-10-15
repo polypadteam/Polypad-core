@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {seenOf} from "../lib/Seen.sol";
+import {seenOf, supplyOf} from "../lib/Seen.sol";
 import {console} from "forge-std/console.sol";
 import {PExchange} from "../../src/PExchange.sol";
 import {PToken} from "../../src/PToken.sol";
@@ -41,8 +41,9 @@ contract ExchangeInvariantsTest is PolypadBase {
         amounts[0] = 20_000e6;
         amounts[1] = 20_000e6;
         uint256[] memory seen1 = seenOf(exchange, ids);
+        uint256[] memory sup1 = supplyOf(exchange, ids);
         vm.prank(keeper);
-        exchange.reportBacked(ids, amounts, seen1);
+        exchange.reportBacked(ids, amounts, seen1, sup1);
 
         for (uint256 i; i < 5; ++i) {
             address a = makeAddr(string(abi.encodePacked("actor", vm.toString(i))));
@@ -205,6 +206,9 @@ contract ExchangeInvariantsTest is PolypadBase {
         for (uint256 m; m < 2; ++m) {
             uint256 id = m == 0 ? ID : ID_B;
             assertLe(exchange.backed(id), exchange.pTokenOf(id).totalSupply(), "backing above supply");
+            // v15: the report's bound is never above the supply nor its burn count ahead.
+            assertLe(exchange.lowSupply(id), exchange.pTokenOf(id).totalSupply(), "lowSupply above supply");
+            assertLe(exchange.burnedAtReport(id), exchange.burnedTotal(id), "burnedAtReport ahead of burnedTotal");
         }
     }
 

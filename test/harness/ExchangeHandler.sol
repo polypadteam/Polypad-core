@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {seenOf} from "../lib/Seen.sol";
+import {seenOf, supplyOf} from "../lib/Seen.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {PExchange} from "../../src/PExchange.sol";
@@ -347,8 +347,9 @@ contract ExchangeHandler is Test {
         i1[0] = ids[m];
         a1[0] = bound(amount, 0, 100_000e6);
         uint256[] memory seen1 = seenOf(exchange, i1);
+        uint256[] memory sup1 = supplyOf(exchange, i1);
         vm.prank(keeper);
-        exchange.reportBacked(i1, a1, seen1);
+        exchange.reportBacked(i1, a1, seen1, sup1);
     }
 
     function pause(uint256 m, uint256 seed) external {

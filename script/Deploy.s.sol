@@ -41,6 +41,9 @@ contract DevUSDG is ERC20 {
  *   OUTFLOW_FLOAT_BPS  hourly redemption cap as bps of the float (default 5,000 = 50%, at most 10,000)
  *   METER_SALES      whether sales at a quote count against the hourly cap (default true;
  *                    payouts of settled markets always do)
+ *   UNCAPPED_RISK    true: no risk caps (`defaultMaxRisk` and `maxTotalRisk` type(uint256).max,
+ *                    spreads and price band left at their defaults), as every deployment since
+ *                    v13 has run; default false keeps the $5,000 / $25,000 constructor caps
  *   DEPLOY_OUT       output path (default deployments/<chainid>.json; set it for local runs)
  *
  *   NEW_OWNER        optional: the offline owner wallet. Ownership of the oracle,
@@ -130,6 +133,11 @@ contract Deploy is Script {
         o.exchange
             .setOutflowCap(vm.envOr("OUTFLOW_FLOOR", uint256(5_000e6)), vm.envOr("OUTFLOW_FLOAT_BPS", uint256(5_000)));
         if (!vm.envOr("METER_SALES", true)) o.exchange.setMeterSales(false);
+        if (vm.envOr("UNCAPPED_RISK", false)) {
+            PExchange e = o.exchange;
+            e.setParams(e.buySpreadBps(), e.sellSpreadBps(), e.minPrice(), e.maxPrice(), type(uint256).max);
+            e.setMaxTotalRisk(type(uint256).max);
+        }
         uint256 gradUsd = vm.envOr("GRAD_USD", uint256(6_000e6));
         if (gradUsd != 6_000e6) o.factory.setConfig(platform, gradUsd);
         address newOwner = vm.envOr("NEW_OWNER", address(0));

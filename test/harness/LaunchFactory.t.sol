@@ -324,6 +324,7 @@ contract LaunchFactoryHarnessTest is PolypadBase {
     }
 
     function test_deployScriptWiresEverything() public {
+        vm.setEnv("UNCAPPED_RISK", "false"); // whatever the shell running forge has set
         _runDeploy();
         assertEq(dOwner, 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38);
         // Ownership: the broadcaster owns every owned contract.
@@ -340,6 +341,20 @@ contract LaunchFactoryHarnessTest is PolypadBase {
         assertEq(address(dEx.oracle()), address(dO));
         _checkFactory();
         _checkPeriphery();
+
+        // v15's deploy setting for what v13 and v14 set by hand after deploying:
+        // no risk caps, spreads and band as deployed. (Here, not in a test of its
+        // own: the environment is shared by tests running in parallel.)
+        vm.setEnv("UNCAPPED_RISK", "true");
+        _runDeploy();
+        vm.setEnv("UNCAPPED_RISK", "false");
+        assertEq(dEx.defaultMaxRisk(), type(uint256).max);
+        assertEq(dEx.maxTotalRisk(), type(uint256).max);
+        assertEq(dEx.buySpreadBps(), 25);
+        assertEq(dEx.sellSpreadBps(), 25);
+        assertEq(dEx.minPrice(), 1_000);
+        assertEq(dEx.maxPrice(), 999_000);
+        assertEq(dEx.owner(), dOwner);
     }
 
     function _checkFactory() internal view {

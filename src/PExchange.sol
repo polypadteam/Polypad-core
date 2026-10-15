@@ -205,16 +205,28 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     /// @notice Shares minted since the keeper last reported the market: a burn
     ///         of up to this many is of shares the desk may not have bought yet.
     mapping(uint256 positionId => uint256) public mintedSinceReport;
-    /// @notice Every share ever burned, per market. A backing report names the
-    ///         count the desk had seen; shares burned since come off it, since
-    ///         the desk may have sold them after reading its holdings.
+    /// @notice Every share ever burned, per market. With the supply it gives every
+    ///         share ever minted: a backing report names both as the desk read them.
     mapping(uint256 positionId => uint256) public burnedTotal;
+    /// @notice The lowest supply since the market's last backing report (set to
+    ///         the supply at each report, lowered after every burn; 0 before the
+    ///         first). With the burns since a read it bounds the report of that
+    ///         read by the lowest the supply can have been since (the desk sells
+    ///         only down to the supply).
+    mapping(uint256 positionId => uint256) public lowSupply;
+    /// @notice `burnedTotal` at the market's last backing report.
+    mapping(uint256 positionId => uint256) public burnedAtReport;
+    /// @notice Shares minted at a pending $1 payout that no hedge report has
+    ///         covered yet. They carry no risk, so a report's rise in backing
+    ///         covers them first and takes risk off only for what is left.
+    mapping(uint256 positionId => uint256) public mintedAtOne;
 
     event PTokenCreated(uint256 indexed positionId, address pToken);
     event Minted(uint256 indexed positionId, address indexed to, uint256 usdgIn, uint256 pOut, uint256 price);
     event Redeemed(uint256 indexed positionId, address indexed to, uint256 pIn, uint256 usdgOut, uint256 price);
     event Absorbed(uint256 indexed positionId, uint256 amount);
     event BackedReported(uint256 indexed positionId, uint256 amount);
+    event ReportSkipped(uint256 indexed positionId);
     event SentToBridge(address indexed to, uint256 amount);
     event ParamsSet(
         uint16 buySpreadBps, uint16 sellSpreadBps, uint64 minPrice, uint64 maxPrice, uint256 defaultMaxRisk
@@ -313,12 +325,9 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     ) external nonReentrant returns (uint256 out) {
         if (usdgIn == 0) revert ZeroAmount();
         (uint256 id, PToken p) = _market(pToken);
-        {
-            (bool atPayout, bool final_, uint64 payout) = _payoutMint(id);
-            if (atPayout) return _mintSettled(id, p, usdgIn, minOut, to, payout, final_);
-        }
-        uint64 price = _quoted(id, usdgIn, q, sig, oracle.BUY());
-        out = _mint(id, p, usdgIn, minOut, to, price, buySpreadBps);
+        (bool atPayout, bool final_, uint64 price) = _payoutMint(id);
+        if (!atPayout) price = _quoted(id, usdgIn, q, sig, oracle.BUY());
+        out = _mint(id, p, usdgIn, minOut, to, price, atPayout, final_);
     }
 
     /**
@@ -418,40 +427,82 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     /* -------------------------------------------------------------- keeper */
 
     /// @notice Shares the desk holds on Polymarket, per market, as it read them
-    ///         when `burnedTotal` was `seen`.
-    function reportBacked(uint256[] calldata ids, uint256[] calldata amounts, uint256[] calldata seen)
-        external
-        onlyKeeper
-    {
-        if (ids.length != amounts.length || ids.length != seen.length) revert BadParams();
+    ///         after reading the market when `burnedTotal` was `seen` and the
+    ///         pToken supply `supplyAtRead`, both from that one read.
+    function reportBacked(
+        uint256[] calldata ids,
+        uint256[] calldata amounts,
+        uint256[] calldata seen,
+        uint256[] calldata supplyAtRead
+    ) external onlyKeeper {
+        if (ids.length != amounts.length || ids.length != seen.length || ids.length != supplyAtRead.length) {
+            revert BadParams();
+        }
         for (uint256 i; i < ids.length; ++i) {
-            _report(ids[i], amounts[i], seen[i]);
+            _report(ids[i], amounts[i], seen[i], supplyAtRead[i]);
         }
     }
 
-    function _report(uint256 id, uint256 amount, uint256 seen) internal {
-        // A desk read against another state (a keeper bug) is skipped, not
-        // allowed to stop the rest of the batch.
-        if (seen > burnedTotal[id]) return;
-        // Shares burned since the desk read its holdings may have been sold
-        // since; shares beyond supply back nothing. Counting either would let
-        // them back a mint unhedged (or, from a stolen keeper key, any amount).
+    /// @dev The desk sells only shares beyond the supply, so after its read it
+    ///      holds at least what it read, or the lowest supply since, whichever
+    ///      is less. The report takes the lowest it can prove that supply was,
+    ///      and never lowers backing for burns alone: what was backed is still
+    ///      held (the same rule, since the last report). So a share minted after
+    ///      the read and burned before the report changes nothing here (its mint
+    ///      added its risk and its burn took it off), round trips between a read
+    ///      and its report neither lower backing nor raise risk, and only the
+    ///      desk holding less than was backed, as it read it, is lost backing.
+    ///      `seen` is a consistency check and, with `supplyAtRead`, the minted
+    ///      count at the read; the bound otherwise uses the market's own counts.
+    function _report(uint256 id, uint256 amount, uint256 seen, uint256 supplyAtRead) internal {
         PToken p = pTokenOf[id];
         uint256 supply = address(p) == address(0) ? 0 : p.totalSupply();
+        uint256 burned = burnedTotal[id];
+        // A desk read against another state (a keeper bug) is skipped, not
+        // allowed to stop the rest of the batch: more burned, or more minted
+        // (`supplyAtRead + seen`), than the market has ever had. Nothing is
+        // written, so the market and `totalRisk` stay as they were; the event
+        // lets the keeper see it.
+        if (seen > burned || supplyAtRead > supply + (burned - seen)) {
+            emit ReportSkipped(id);
+            return;
+        }
         uint256 was = backed[id];
         // Backing lost is what the desk held below what was backed, as it read
         // it: shares burned since were either taken off backing already or
-        // minted after the read and never held, so they are not lost again.
+        // were never held, so they are not lost again.
         uint256 lost = was > amount ? was - amount : 0;
-        uint256 gone = burnedTotal[id] - seen;
-        amount = amount > gone ? amount - gone : 0;
-        if (amount > supply) amount = supply;
-        // Shares that stop being backed carry risk again, at the most a share
-        // can; shares hedged since bring the stored risk down to what the rest
-        // can carry, so the total across markets stays current.
-        (uint256 risk, uint256 low, uint256 high) = _risk(id);
+        uint256 least = _leastSince(id, supplyAtRead + seen, burned);
+        // Nothing lost: the desk still holds what was backed (it held it at the
+        // last report and has sold only down to the supply since). The clamp to
+        // the supply is redundant defence: `least` and `was` are within it.
+        if (lost == 0 && was > least) least = was;
+        amount = _min(_min(amount, least), supply);
         backed[id] = amount;
         delete mintedSinceReport[id];
+        lowSupply[id] = supply;
+        burnedAtReport[id] = burned;
+        _reportRisk(id, supply, was, amount, lost);
+        emit BackedReported(id, amount);
+    }
+
+    /// @dev The lowest the supply can have been since a read when `minted`
+    ///      shares had ever been minted: every share burned since then burned
+    ///      before any minted since; or, for a read after the last report, the
+    ///      lowest seen since it, and for one before, as low as the burns up to
+    ///      that report could take it.
+    function _leastSince(uint256 id, uint256 minted, uint256 burned) internal view returns (uint256 least) {
+        least = minted > burned ? minted - burned : 0;
+        uint256 atReport = burnedAtReport[id];
+        uint256 low = minted > atReport ? minted - atReport : 0;
+        uint256 lowSince = lowSupply[id];
+        if (lowSince < low) low = lowSince;
+        if (low > least) least = low;
+    }
+
+    /// @dev The risk after a report moved backing from `was` to `amount`.
+    function _reportRisk(uint256 id, uint256 supply, uint256 was, uint256 amount, uint256 lost) internal {
+        (uint256 risk, uint256 low, uint256 high) = _risk(id);
         (bool paused, bool settled,) = oracle.status(id);
         if (settled) {
             risk = 0;
@@ -462,14 +513,18 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
             // it already carried (forged fills included) stays.
             (risk, low, high) = (paused ? risk : risk + lost * ONE, 0, ONE);
         } else if (amount > was) {
-            // Hedged shares carried at least (1 - high) each, whichever they were.
-            uint256 off = (amount - was) * (ONE - high);
+            // The rise covers the unbacked shares minted at a pending $1 first
+            // (no more than were unbacked): they carry no risk. Every other
+            // hedged share carried at least (1 - high), whichever it was.
+            uint256 d = amount - was;
+            uint256 ones = _min(mintedAtOne[id], supply - was);
+            mintedAtOne[id] = ones > d ? ones - d : 0;
+            uint256 off = (d > ones ? d - ones : 0) * (ONE - high);
             risk = _bounded(risk > off ? risk - off : 0, supply, amount, low);
         }
-        // Otherwise only shares burned since lowered it: every mint carried its
-        // own risk and burns took off no more than (1 - high), so it stands.
+        // Otherwise nothing lost and backing as it was (it never falls here):
+        // the risk stands.
         _storeRisk(id, risk, low, high);
-        emit BackedReported(id, amount);
     }
 
     /// @notice Move float to the desk's Polymarket deposit address. Destination is fixed by the owner.
@@ -511,13 +566,15 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
     }
 
     function acceptBridgeDeposit() external onlyOwner {
-        if (pendingBridgeDepositAt == 0) revert NothingPending();
-        if (block.timestamp < pendingBridgeDepositAt) revert NotYet(pendingBridgeDepositAt);
-        bridgeDeposit = pendingBridgeDeposit;
-        if (bridgeDeposit != address(0)) bridgeEverSet = true;
+        uint256 at = pendingBridgeDepositAt;
+        if (at == 0) revert NothingPending();
+        if (block.timestamp < at) revert NotYet(at);
+        address b = pendingBridgeDeposit;
+        bridgeDeposit = b;
+        if (b != address(0)) bridgeEverSet = true;
         pendingBridgeDeposit = address(0);
         pendingBridgeDepositAt = 0;
-        emit RolesSet(keeper, factory, bridgeDeposit);
+        emit RolesSet(keeper, factory, b);
     }
 
     function setParams(
@@ -544,7 +601,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     /// @notice Name a market's share token after its outcome. Keeper or owner.
     function setShareLabel(uint256 positionId, string calldata name_, string calldata symbol_) external {
-        if (msg.sender != keeper && msg.sender != owner()) revert OnlyKeeper();
+        _keeperOrOwner();
         PToken p = pTokenOf[positionId];
         if (address(p) == address(0) || bytes(name_).length > 64 || bytes(symbol_).length > 16) revert BadParams();
         p.setLabel(name_, symbol_);
@@ -577,7 +634,7 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
 
     /// @notice Stop every mint, redeem, release and queue payment. The keeper may halt; only the owner resumes.
     function halt() external {
-        if (msg.sender != keeper && msg.sender != owner()) revert OnlyKeeper();
+        _keeperOrOwner();
         halted = true;
         emit HaltSet(true);
     }
@@ -642,26 +699,44 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         return m[hour] + (prev * (3_600 - intoHour)) / 3_600;
     }
 
-    /// @dev `n` shares left the supply (already burned). Up to `mintedSinceReport`
-    ///      of them are taken as shares the desk may not have bought yet: they
-    ///      leave the unbacked gap, with at least (1 - high) of risk each. The
-    ///      rest were backed: backing drops with them, so the desk's shares for
-    ///      them, which it will sell, cannot back a new mint.
+    /// @dev `n` shares left the supply (already burned). They are taken as
+    ///      shares the desk may not have bought yet, within the unbacked gap:
+    ///      first up to `mintedAtOne`, which carry no risk and take none off
+    ///      (taking it off would leave quoted shares unhedged with less than
+    ///      they carry), then up to `mintedSinceReport`, with at least
+    ///      (1 - high) of risk each. The rest were backed: backing drops with
+    ///      them, so the desk's shares for them, which it will sell, cannot
+    ///      back a new mint.
     function _burned(uint256 id, uint256 n) internal {
         burnedTotal[id] += n;
         uint256 b = backed[id];
         uint256 supply = pTokenOf[id].totalSupply();
-        uint256 k = mintedSinceReport[id];
-        if (k > n) k = n;
-        if (k > supply + n - b) k = supply + n - b;
+        uint256 gap = supply + n - b;
+        uint256 a = _min(_min(mintedAtOne[id], n), gap);
+        if (a > 0) mintedAtOne[id] -= a;
+        uint256 k = _min(_min(mintedSinceReport[id], n - a), gap - a);
         mintedSinceReport[id] -= k;
-        b = b > n - k ? b - (n - k) : 0;
+        uint256 rest = n - a - k;
+        b = b > rest ? b - rest : 0;
         backed[id] = b;
+        // The next report is held to the lowest supply since the last.
+        if (supply < lowSupply[id]) lowSupply[id] = supply;
         (uint256 risk, uint256 low, uint256 high) = _risk(id);
         if (risk == 0) return;
         if (_settled(id)) return _storeRisk(id, 0, 0, 0);
         uint256 off = k * (ONE - high);
         _storeRisk(id, _bounded(risk > off ? risk - off : 0, supply, b, low), low, high);
+    }
+
+    function _keeperOrOwner() internal view {
+        if (msg.sender != keeper && msg.sender != owner()) revert OnlyKeeper();
+    }
+
+    /// @dev The checks every mint and redeem starts with, then `_markHour`.
+    function _enter(address to) internal {
+        if (halted) revert Halted();
+        if (to == address(0)) revert BadParams();
+        _markHour();
     }
 
     /// @dev Record the float for the outflow cap at the hour's first trade, before it moves it.
@@ -678,20 +753,31 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         return f.hour == 0 || cur < f.amount ? cur : f.amount;
     }
 
-    function _mint(uint256 id, PToken p, uint256 usdgIn, uint256 minOut, address to, uint64 price, uint16 spreadBps)
+    /// @dev A mint at `price` plus the buy spread: a quote, or with `atPayout` a
+    ///      payout. A settled market (`final_`) mints at its payout, and so does
+    ///      one with a $1 payout still inside its delay. The USDG stays here and
+    ///      is the backing, so there is no band and no unbacked cap. A share at
+    ///      a pending $1 adds no risk, and the market's stored risk is kept in
+    ///      case it is cancelled; its shares count in `mintedAtOne`, so the
+    ///      desk's hedge of them, or their burn, takes no risk off quoted shares.
+    function _mint(uint256 id, PToken p, uint256 usdgIn, uint256 minOut, address to, uint64 price, bool atPayout, bool final_)
         internal
         returns (uint256 out)
     {
-        if (halted) revert Halted();
-        if (to == address(0)) revert BadParams();
-        _markHour();
-        if (price < minPrice || price > maxPrice) revert PriceOutOfBand(price);
+        _enter(to);
+        if (!atPayout) {
+            if (price < minPrice || price > maxPrice) revert PriceOutOfBand(price);
+        } else if (price == 0) {
+            revert SettledAtZero(id);
+        }
 
-        out = _mintOut(price, usdgIn, spreadBps);
+        out = _mintOut(price, usdgIn, buySpreadBps);
         if (out == 0) revert ZeroAmount();
         if (out < minOut) revert Slippage(out, minOut);
 
-        _checkRisk(id, p.totalSupply(), out, price);
+        if (!atPayout) _checkRisk(id, p.totalSupply(), out, price);
+        else if (final_) _storeRisk(id, 0, 0, 0);
+        else mintedAtOne[id] += out;
 
         usdg.safeTransferFrom(msg.sender, address(this), usdgIn);
         p.mint(to, out);
@@ -771,35 +857,11 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         return (false, false, 0);
     }
 
-    /// @dev A settled market mints at the payout plus the buy spread. The USDG stays
-    ///      here and is the backing, so there is no band and no unbacked cap.
-    ///      `final` false: a $1 payout still inside its delay. A share at $1 adds
-    ///      no risk, and the market's stored risk is kept in case it is cancelled.
-    function _mintSettled(uint256 id, PToken p, uint256 usdgIn, uint256 minOut, address to, uint64 payout, bool final_)
-        internal
-        returns (uint256 out)
-    {
-        if (halted) revert Halted();
-        if (to == address(0)) revert BadParams();
-        if (payout == 0) revert SettledAtZero(id);
-        _markHour();
-        out = _mintOut(payout, usdgIn, buySpreadBps);
-        if (out == 0) revert ZeroAmount();
-        if (out < minOut) revert Slippage(out, minOut);
-        usdg.safeTransferFrom(msg.sender, address(this), usdgIn);
-        p.mint(to, out);
-        if (final_) _storeRisk(id, 0, 0, 0);
-        emit Minted(id, to, usdgIn, out, payout);
-        if (queued > 0) _payQueue(3);
-    }
-
     function _redeem(uint256 id, PToken p, uint256 amountIn, uint256 minOut, address to, uint64 price, bool settled)
         internal
         returns (uint256 out)
     {
-        if (halted) revert Halted();
-        if (to == address(0)) revert BadParams();
-        _markHour();
+        _enter(to);
         out = _redeemOut(price, amountIn, settled ? settleFeeBps : sellSpreadBps);
         if (out < minOut) revert Slippage(out, minOut);
         emit Redeemed(id, to, amountIn, out, price);
@@ -929,6 +991,10 @@ contract PExchange is Ownable2Step, ReentrancyGuard {
         uint256 used = quoteFilled[digest] + amount;
         if (used > q.maxAmount) revert QuoteTooSmall(used, q.maxAmount);
         quoteFilled[digest] = used;
+    }
+
+    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
+        return a < b ? a : b;
     }
 
     function _mulDivUp(uint256 a, uint256 b, uint256 d) internal pure returns (uint256) {

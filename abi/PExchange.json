@@ -144,6 +144,25 @@
   },
   {
     "type": "function",
+    "name": "burnedAtReport",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "burnedTotal",
     "inputs": [
       {
@@ -388,6 +407,25 @@
   },
   {
     "type": "function",
+    "name": "lowSupply",
+    "inputs": [
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "maxPrice",
     "inputs": [],
     "outputs": [
@@ -558,6 +596,25 @@
       },
       {
         "name": "usdgIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "mintedAtOne",
+    "inputs": [
+      {
+        "name": "positionId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -991,6 +1048,11 @@
       },
       {
         "name": "seen",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "supplyAtRead",
         "type": "uint256[]",
         "internalType": "uint256[]"
       }
@@ -1711,6 +1773,19 @@
         "indexed": true,
         "internalType": "uint256"
       },
+      {
+        "name": "positionId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ReportSkipped",
+    "inputs": [
       {
         "name": "positionId",
         "type": "uint256",

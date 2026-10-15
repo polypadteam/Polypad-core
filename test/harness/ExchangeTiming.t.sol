@@ -707,10 +707,13 @@ contract ExchangeTimingTest is PolypadBase {
     function test_onlyKeeperReportsBacking() public {
         vm.prank(alice);
         vm.expectRevert(PExchange.OnlyKeeper.selector);
-        exchange.reportBacked(new uint256[](1), new uint256[](1), new uint256[](1));
+        exchange.reportBacked(new uint256[](1), new uint256[](1), new uint256[](1), new uint256[](1));
         vm.prank(keeper);
         vm.expectRevert(PExchange.BadParams.selector);
-        exchange.reportBacked(new uint256[](1), new uint256[](1), new uint256[](2));
+        exchange.reportBacked(new uint256[](1), new uint256[](1), new uint256[](2), new uint256[](1));
+        vm.prank(keeper);
+        vm.expectRevert(PExchange.BadParams.selector);
+        exchange.reportBacked(new uint256[](1), new uint256[](1), new uint256[](1), new uint256[](2));
     }
 
     /* =============================================== 5. queue */
